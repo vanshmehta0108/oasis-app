@@ -47,16 +47,25 @@ const EXTRACTION_SCHEMA: Schema = {
 };
 
 /**
- * Extract structured product data from raw web search text using Gemini.
+ * Extract product data from web search text.
+ * Uses fast regex/heuristic extraction first, falls back to AI if needed.
  */
 async function extractProductFromText(
   searchText: string,
   hint: string
 ): Promise<EnrichedProduct | null> {
+  // Try fast regex extraction first (no AI needed, < 1ms)
+  const fastResult = fastExtractIngredients(searchText, hint);
+  if (fastResult && fastResult.ingredients.length >= 3) {
+    console.log(`[enrich] Fast extraction found ${fastResult.ingredients.length} ingredients`);
+    return fastResult;
+  }
+
+  // Fall back to AI extraction if fast method didn't find enough
   const client = getGenAI();
   if (!client) {
-    console.warn("Gemini not available — cannot extract product data");
-    return null;
+    console.warn("Gemini not available — returning fast extraction result");
+    return fastResult;
   }
 
   try {
@@ -81,7 +90,7 @@ async function extractProductFromText(
       "",
       "Web search results:",
       "─".repeat(40),
-      searchText.slice(0, 6000), // cap context to save tokens
+      searchText.slice(0, 4000), // cap context to save tokens + time
       "─".repeat(40),
       "",
       "Extract the product name, brand, category, and FULL ingredients list.",
@@ -103,8 +112,74 @@ async function extractProductFromText(
     };
   } catch (error) {
     console.error("AI extraction error:", error);
-    return null;
+    // Return fast extraction result as fallback
+    return fastResult;
   }
+}
+
+/**
+ * Fast regex-based ingredient extraction from search snippets.
+ * No AI call needed — runs in < 1ms.
+ */
+function fastExtractIngredients(
+  text: string,
+  hint: string
+): EnrichedProduct | null {
+  // Common patterns for ingredient lists in search snippets
+  const ingredientPatterns = [
+    // "Ingredients: X, Y, Z" or "Ingredients list: X, Y, Z"
+    /ingredients?\s*(?:list)?\s*[:;]\s*([^.]{20,500})/gi,
+    // "made from X, Y, and Z"
+    /made\s+(?:from|with|of)\s+([^.]{20,300})/gi,
+    // "contains X, Y, Z"
+    /contains?\s*[:;]?\s*([^.]{20,300})/gi,
+    // "composition: X, Y, Z"
+    /composition\s*[:;]\s*([^.]{20,300})/gi,
+  ];
+
+  let bestIngredients: string[] = [];
+
+  for (const pattern of ingredientPatterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      const rawList = match[1];
+      const ingredients = rawList
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 1 && s.length < 80)
+        .filter((s) => !/^\d+$/.test(s)) // skip pure numbers
+        .filter((s) => !/^(and|or|the|with|in|of|a|an)$/i.test(s)); // skip connectors
+
+      if (ingredients.length > bestIngredients.length) {
+        bestIngredients = ingredients;
+      }
+    }
+  }
+
+  if (bestIngredients.length === 0) return null;
+
+  // Extract brand and name from hint
+  const parts = hint.split(/\s+/);
+  const brand = parts.length > 1 ? parts[0] : "Unknown";
+  const name = hint;
+
+  // Guess category from ingredients
+  let category = "food";
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes("shampoo") || lowerText.includes("cream") || lowerText.includes("lotion")) category = "skincare";
+  else if (lowerText.includes("beverage") || lowerText.includes("juice") || lowerText.includes("drink")) category = "beverage";
+  else if (lowerText.includes("snack") || lowerText.includes("chips") || lowerText.includes("namkeen")) category = "snack";
+  else if (lowerText.includes("baby") || lowerText.includes("infant")) category = "baby";
+
+  return {
+    name,
+    brand,
+    category,
+    ingredients: bestIngredients,
+    description: `Product found via web search`,
+    source_urls: [],
+    confidence: bestIngredients.length >= 5 ? "high" : "medium",
+  };
 }
 
 /**
