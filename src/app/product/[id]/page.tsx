@@ -12,6 +12,8 @@ import type { IngredientAnalysis } from "@/lib/mockData";
 import { getProductByBarcode as getDbProduct } from "@/lib/db";
 import { recordScan } from "@/lib/scanHistory";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+
 interface ProductData {
   id: string;
   name: string;
@@ -29,6 +31,8 @@ interface ProductData {
   };
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function getSummaryLevel(score: number) {
   if (score >= 75) return { label: "Safe", color: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-l-emerald-400" };
   if (score >= 55) return { label: "Moderate", color: "text-lime-400", bg: "bg-lime-400/10", border: "border-l-lime-400" };
@@ -44,6 +48,45 @@ function getScoreColor(score: number) {
   return "#f87171";
 }
 
+function mapAnalysisJson(analysis: Record<string, unknown>): ProductData["analysis"] {
+  const rawIngredients = (analysis.ingredients as Array<{
+    name: string;
+    risk?: string;
+    risk_level?: string;
+    explanation: string;
+  }>) || [];
+
+  return {
+    summary: (analysis.summary as string) || "",
+    ingredients: rawIngredients.map((ing) => ({
+      name: ing.name,
+      risk: (ing.risk || ing.risk_level || "caution") as IngredientAnalysis["risk"],
+      explanation: ing.explanation,
+    })),
+    warnings: (analysis.warnings as string[]) || [],
+    healthier_alternative:
+      (analysis.healthier_alternative as string) ||
+      (analysis.healthier_tip as string) ||
+      "",
+  };
+}
+
+function mapRawToProduct(data: Record<string, unknown>): ProductData {
+  return {
+    id: (data.id as string) || "",
+    name: (data.name as string) || "",
+    brand: (data.brand as string) || "",
+    category: (data.category as string) || "",
+    ingredients: (data.ingredients as string[]) || [],
+    safety_score: (data.safety_score as number) ?? null,
+    grade: (data.grade as string) ?? null,
+    image_url: data.image_url as string | undefined,
+    analysis: data.analysis as ProductData["analysis"] | undefined,
+  };
+}
+
+// ── Animation ──────────────────────────────────────────────────────────────────
+
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08 } },
@@ -54,6 +97,8 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.33, 1, 0.68, 1] as const } },
 };
 
+// ── Component ──────────────────────────────────────────────────────────────────
+
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [product, setProduct] = useState<ProductData | null>(null);
@@ -61,39 +106,67 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [notFoundState, setNotFoundState] = useState(false);
   const { showToast } = useToast();
 
-  // Derived values (safe to compute even when product is null)
   const score = product?.safety_score ?? 0;
   const grade = product?.grade ?? "?";
-  const hasScore = product?.safety_score !== null && product?.grade !== null;
+  const hasScore = product?.safety_score != null && product?.grade != null;
   const level = getSummaryLevel(score);
   const scoreColor = hasScore ? getScoreColor(score) : "#6b7c72";
 
-  // Dynamic OG meta tags for social sharing
+  // Dynamic OG meta tags
   useEffect(() => {
     if (!product) return;
     document.title = `${product.name} — ${score}/100 | Oasis`;
 
-    const updateMeta = (property: string, content: string) => {
-      let meta = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
-      if (!meta) {
-        meta = document.createElement("meta");
-        meta.setAttribute("property", property);
-        document.head.appendChild(meta);
+    const setMeta = (prop: string, content: string) => {
+      let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement;
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute("property", prop);
+        document.head.appendChild(el);
       }
-      meta.content = content;
+      el.content = content;
     };
 
     const shareUrl = `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}&score=${score}&grade=${grade}`;
-    updateMeta("og:title", `${product.name} — Safety Score: ${score}/100`);
-    updateMeta("og:description", product.analysis?.summary || `Scanned on Oasis. Grade ${grade}.`);
-    updateMeta("og:image", shareUrl);
-    updateMeta("og:type", "article");
+    setMeta("og:title", `${product.name} — Safety Score: ${score}/100`);
+    setMeta("og:description", product.analysis?.summary || `Scanned on Oasis. Grade ${grade}.`);
+    setMeta("og:image", shareUrl);
+    setMeta("og:type", "article");
   }, [product, score, grade]);
 
+  // Trigger AI analysis for unscored products
+  function runAnalysis(ingredients: string[], category: string) {
+    setAnalyzing(true);
+    fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ingredients, category: category || "food" }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((result) => {
+        if (!result?.analysis) return;
+        setProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                safety_score: result.analysis.score,
+                grade: result.analysis.grade,
+                analysis: mapAnalysisJson(result.analysis),
+              }
+            : prev,
+        );
+      })
+      .catch(console.error)
+      .finally(() => setAnalyzing(false));
+  }
+
+  // Main data loader
   useEffect(() => {
-    // 1. Try Supabase DB first (by barcode since our IDs are barcodes)
-    getDbProduct(id).then((dbProduct) => {
-      if (dbProduct) {
+    // 1. Try Supabase DB first
+    getDbProduct(id)
+      .then((dbProduct) => {
+        if (!dbProduct) return null;
+
         const analysis = dbProduct.analysis as unknown as Record<string, unknown> | null;
         setProduct({
           id: dbProduct.barcode,
@@ -104,188 +177,93 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           safety_score: dbProduct.safety_score,
           grade: dbProduct.score_grade,
           image_url: dbProduct.image_url || undefined,
-          analysis: analysis
-            ? {
-                summary: (analysis.summary as string) || "",
-                ingredients: ((analysis.ingredients as Array<{ name: string; risk?: string; risk_level?: string; explanation: string }>) || []).map((ing) => ({
-                  name: ing.name,
-                  risk: (ing.risk || ing.risk_level || "caution") as IngredientAnalysis["risk"],
-                  explanation: ing.explanation,
-                })),
-                warnings: (analysis.warnings as string[]) || [],
-                healthier_alternative: (analysis.healthier_alternative as string) || (analysis.healthier_tip as string) || "",
-              }
-            : undefined,
+          analysis: analysis ? mapAnalysisJson(analysis) : undefined,
         });
-        recordScan({ id: dbProduct.barcode, name: dbProduct.name, brand: dbProduct.brand, category: dbProduct.category as string });
-        return;
-      }
-
-      // 2. Not in DB — continue with OFF / web / sessionStorage lookups
-      loadExternalProduct();
-    }).catch(() => {
-      loadExternalProduct();
-    });
-
-    function loadExternalProduct() {
-    // Check sessionStorage for OFF product, or fetch from OFF API directly
-    if (id.startsWith("off-")) {
-      const barcode = id.replace("off-", "");
-      const stored = sessionStorage.getItem(`off-product-${barcode}`);
-
-      const loadOffProduct = (data: Record<string, unknown>) => {
-        setProduct({
-          id: data.id as string,
-          name: data.name as string,
-          brand: data.brand as string,
-          category: data.category as string,
-          ingredients: (data.ingredients as string[]) || [],
-          safety_score: (data.safety_score as number) || null,
-          grade: (data.grade as string) || null,
-          image_url: data.image_url as string | undefined,
-          analysis: data.analysis as ProductData["analysis"] | undefined,
+        recordScan({
+          id: dbProduct.barcode,
+          name: dbProduct.name,
+          brand: dbProduct.brand,
+          category: dbProduct.category as string,
         });
-        recordScan(data as { id: string; name: string; brand: string; category: string });
-
-        // If it needs analysis and has ingredients, trigger AI analysis
-        if (data.needs_analysis && (data.ingredients as string[])?.length > 0) {
-          setAnalyzing(true);
-          fetch("/api/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ingredients: data.ingredients, category: data.category || "food" }),
-          })
-            .then((res) => res.ok ? res.json() : null)
-            .then((result) => {
-              if (result?.analysis) {
-                setProduct((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        safety_score: result.analysis.score,
-                        grade: result.analysis.grade,
-                        analysis: {
-                          summary: result.analysis.summary,
-                          ingredients: (result.analysis.ingredients || []).map((ing: { name: string; risk_level?: string; risk?: string; explanation: string }) => ({
-                            name: ing.name,
-                            risk: ing.risk || ing.risk_level || "caution",
-                            explanation: ing.explanation,
-                          })),
-                          warnings: result.analysis.warnings,
-                          healthier_alternative: result.analysis.healthier_tip,
-                        },
-                      }
-                    : prev
-                );
-              }
-            })
-            .catch(console.error)
-            .finally(() => setAnalyzing(false));
-        }
-      };
-
-      if (stored) {
-        loadOffProduct(JSON.parse(stored));
-        return;
-      }
-
-      // No sessionStorage — fetch directly from the lookup API
-      fetch("/api/lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ barcode }),
+        return dbProduct; // signal found
       })
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-          if (data?.found && data.product) {
-            loadOffProduct({ ...data.product, needs_analysis: data.needs_analysis });
-          } else {
-            setNotFoundState(true);
+      .then((found) => {
+        if (found) return;
+        // 2. Not in DB — try external sources
+        loadExternal(id);
+      })
+      .catch(() => {
+        loadExternal(id);
+      });
+
+    function loadExternal(productId: string) {
+      // OFF products
+      if (productId.startsWith("off-")) {
+        const barcode = productId.replace("off-", "");
+        const stored = sessionStorage.getItem(`off-product-${barcode}`);
+
+        if (stored) {
+          const data = JSON.parse(stored);
+          setProduct(mapRawToProduct(data));
+          recordScan(data);
+          if (data.needs_analysis && data.ingredients?.length > 0) {
+            runAnalysis(data.ingredients, data.category);
           }
-        })
-        .catch(() => setNotFoundState(true));
-      return;
-    }
-
-    // Handle web-enriched products (from Brave Search)
-    if (id.startsWith("web-")) {
-      const barcode = id.replace("web-", "");
-      const stored = sessionStorage.getItem(`web-product-${barcode}`);
-      if (stored) {
-        const data = JSON.parse(stored);
-        setProduct({
-          id: data.id || id,
-          name: data.name,
-          brand: data.brand,
-          category: data.category,
-          ingredients: data.ingredients || [],
-          safety_score: data.safety_score || null,
-          grade: data.grade || null,
-          image_url: data.image_url,
-          analysis: data.analysis,
-        });
-        recordScan(data);
-
-        if (data.needs_analysis && data.ingredients?.length > 0) {
-          setAnalyzing(true);
-          fetch("/api/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ingredients: data.ingredients, category: data.category || "food" }),
-          })
-            .then((res) => res.ok ? res.json() : null)
-            .then((result) => {
-              if (result?.analysis) {
-                setProduct((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        safety_score: result.analysis.score,
-                        grade: result.analysis.grade,
-                        analysis: {
-                          summary: result.analysis.summary,
-                          ingredients: (result.analysis.ingredients || []).map((ing: { name: string; risk_level?: string; risk?: string; explanation: string }) => ({
-                            name: ing.name,
-                            risk: ing.risk || ing.risk_level || "caution",
-                            explanation: ing.explanation,
-                          })),
-                          warnings: result.analysis.warnings,
-                          healthier_alternative: result.analysis.healthier_tip,
-                        },
-                      }
-                    : prev
-                );
-              }
-            })
-            .catch(console.error)
-            .finally(() => setAnalyzing(false));
+          return;
         }
+
+        // Fetch from lookup API
+        fetch("/api/lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcode }),
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.found && data.product) {
+              setProduct(mapRawToProduct(data.product));
+              recordScan(data.product);
+              if (data.needs_analysis && data.product.ingredients?.length > 0) {
+                runAnalysis(data.product.ingredients, data.product.category);
+              }
+            } else {
+              setNotFoundState(true);
+            }
+          })
+          .catch(() => setNotFoundState(true));
         return;
       }
-    }
 
-    // Check sessionStorage for analyzed products (from photo scan)
-    const analyzedData = sessionStorage.getItem(`analyzed-${id}`);
-    if (analyzedData) {
-      const data = JSON.parse(analyzedData);
-      setProduct({
-        id: data.id,
-        name: data.name,
-        brand: data.brand,
-        category: data.category,
-        ingredients: data.ingredients || [],
-        safety_score: data.safety_score || null,
-        grade: data.grade || null,
-        image_url: data.image_url,
-        analysis: data.analysis,
-      });
-      recordScan(data);
-      return;
-    }
+      // Web-enriched products
+      if (productId.startsWith("web-")) {
+        const barcode = productId.replace("web-", "");
+        const stored = sessionStorage.getItem(`web-product-${barcode}`);
+        if (stored) {
+          const data = JSON.parse(stored);
+          setProduct(mapRawToProduct({ ...data, id: data.id || productId }));
+          recordScan(data);
+          if (data.needs_analysis && data.ingredients?.length > 0) {
+            runAnalysis(data.ingredients, data.category);
+          }
+          return;
+        }
+      }
 
-    setNotFoundState(true);
-    } // end loadExternalProduct
+      // Analyzed products from photo scan
+      const analyzedData = sessionStorage.getItem(`analyzed-${productId}`);
+      if (analyzedData) {
+        const data = JSON.parse(analyzedData);
+        setProduct(mapRawToProduct(data));
+        recordScan(data);
+        return;
+      }
+
+      setNotFoundState(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // ── Render states ──────────────────────────────────────────────────────────
 
   if (notFoundState) {
     return (
@@ -399,13 +377,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Share buttons */}
         <motion.div variants={fadeUp} className="px-5 mb-4">
           <div className="flex gap-2">
-            {/* WhatsApp Share */}
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => {
                 const text = `I scanned ${product.name} on Oasis — it scored ${score}/100 (Grade ${grade}). ${level.label}! 🌿\n\nScan your products: ${window.location.origin}`;
-                const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-                window.open(waUrl, "_blank");
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
               }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/10 border border-[#25D366]/20 hover:bg-[#25D366]/20 transition-colors"
             >
@@ -413,7 +389,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <span className="text-sm font-medium text-[#25D366]">WhatsApp</span>
             </motion.button>
 
-            {/* General Share / Copy */}
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => {
@@ -437,15 +412,13 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           </div>
         </motion.div>
 
-        {/* Summary card with colored left border */}
+        {/* Summary card */}
         {product.analysis && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
             <div className={`flex items-start gap-3 p-4 rounded-2xl ${level.bg} border border-white/5 border-l-[3px] ${level.border}`}>
               <ShieldAlert size={20} className={`${level.color} shrink-0 mt-0.5`} />
               <div>
-                <span className={`text-sm font-bold ${level.color}`}>
-                  Overall: {level.label}
-                </span>
+                <span className={`text-sm font-bold ${level.color}`}>Overall: {level.label}</span>
                 <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
                   {product.analysis.summary}
                 </p>
@@ -457,9 +430,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Raw Ingredients (when no analysis yet) */}
         {!product.analysis && product.ingredients.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">
-              Ingredients
-            </h2>
+            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">Ingredients</h2>
             <div className="p-4 rounded-2xl bg-oasis-card border border-oasis-border">
               <p className="text-xs text-oasis-text-secondary leading-relaxed">
                 {product.ingredients.join(", ")}
@@ -476,9 +447,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Ingredient Analysis */}
         {product.analysis && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">
-              Ingredient Analysis
-            </h2>
+            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">Ingredient Analysis</h2>
             <IngredientList ingredients={product.analysis.ingredients} />
           </motion.div>
         )}
@@ -486,9 +455,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Warnings */}
         {product.analysis && product.analysis.warnings.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">
-              Warnings
-            </h2>
+            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">Warnings</h2>
             <div className="space-y-2">
               {product.analysis.warnings.map((w, i) => (
                 <motion.div
@@ -540,10 +507,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <p className="text-xs text-oasis-muted leading-relaxed mt-1">
                 Set up your health profile to get warnings tailored to your conditions, allergies, and dietary preferences.
               </p>
-              <Link
-                href="/profile"
-                className="inline-block text-xs text-oasis-green font-medium mt-2"
-              >
+              <Link href="/profile" className="inline-block text-xs text-oasis-green font-medium mt-2">
                 Set up profile &rarr;
               </Link>
             </div>

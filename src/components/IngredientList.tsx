@@ -53,10 +53,10 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
 
   return (
     <div className="space-y-2" role="list" aria-label="Ingredient analysis">
-      {ingredients.map((ing, i) => {
+      {ingredients.filter(Boolean).map((ing, i) => {
         // Support both "risk" and "risk_level" field names (mockData vs AI response)
-        const riskKey = ("risk" in ing ? ing.risk : (ing as { risk_level?: string }).risk_level) || "caution";
-        const cfg = riskConfig[riskKey as keyof typeof riskConfig] || riskConfig.caution;
+        const riskKey = (("risk" in ing ? ing.risk : (ing as { risk_level?: string }).risk_level) || "caution") as string;
+        const cfg = riskConfig[riskKey as keyof typeof riskConfig] ?? riskConfig.caution;
         const Icon = cfg.icon;
         const isOpen = expanded === ing.name;
 
