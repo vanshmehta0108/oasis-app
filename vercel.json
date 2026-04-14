@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "src/app/api/enrich/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analyze/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/lookup/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
