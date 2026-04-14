@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getProductByBarcode } from "@/lib/mockData";
 import { fetchProductByBarcode } from "@/lib/openfoodfacts";
+import { enrichByBarcode } from "@/lib/webEnrich";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
@@ -95,7 +96,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 3. Not found anywhere
+    // 3. Try Brave Search + AI extraction as last resort
+    const enriched = await enrichByBarcode(barcode);
+
+    if (enriched && enriched.ingredients.length > 0) {
+      return NextResponse.json(
+        {
+          found: true,
+          source: "web" as const,
+          product: {
+            id: `web-${barcode}`,
+            barcode,
+            name: enriched.name,
+            brand: enriched.brand,
+            category: enriched.category,
+            ingredients: enriched.ingredients,
+            image_url: undefined,
+          },
+          needs_analysis: true,
+          confidence: enriched.confidence,
+          sources: enriched.source_urls,
+        },
+        { headers: corsHeaders() }
+      );
+    }
+
+    // 4. Not found anywhere
     return errorResponse(
       "Product not found",
       404,

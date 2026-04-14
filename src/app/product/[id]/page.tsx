@@ -191,6 +191,63 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       return;
     }
 
+    // Handle web-enriched products (from Brave Search)
+    if (id.startsWith("web-")) {
+      const barcode = id.replace("web-", "");
+      const stored = sessionStorage.getItem(`web-product-${barcode}`);
+      if (stored) {
+        const data = JSON.parse(stored);
+        setProduct({
+          id: data.id || id,
+          name: data.name,
+          brand: data.brand,
+          category: data.category,
+          ingredients: data.ingredients || [],
+          safety_score: data.safety_score || null,
+          grade: data.grade || null,
+          image_url: data.image_url,
+          analysis: data.analysis,
+        });
+        recordScan(data);
+
+        if (data.needs_analysis && data.ingredients?.length > 0) {
+          setAnalyzing(true);
+          fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ingredients: data.ingredients, category: data.category || "food" }),
+          })
+            .then((res) => res.ok ? res.json() : null)
+            .then((result) => {
+              if (result?.analysis) {
+                setProduct((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        safety_score: result.analysis.score,
+                        grade: result.analysis.grade,
+                        analysis: {
+                          summary: result.analysis.summary,
+                          ingredients: (result.analysis.ingredients || []).map((ing: { name: string; risk_level?: string; risk?: string; explanation: string }) => ({
+                            name: ing.name,
+                            risk: ing.risk || ing.risk_level || "caution",
+                            explanation: ing.explanation,
+                          })),
+                          warnings: result.analysis.warnings,
+                          healthier_alternative: result.analysis.healthier_tip,
+                        },
+                      }
+                    : prev
+                );
+              }
+            })
+            .catch(console.error)
+            .finally(() => setAnalyzing(false));
+        }
+        return;
+      }
+    }
+
     // Check sessionStorage for analyzed products (from photo scan)
     const analyzedData = sessionStorage.getItem(`analyzed-${id}`);
     if (analyzedData) {

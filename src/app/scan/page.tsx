@@ -11,7 +11,7 @@ type ScanState = "scanning" | "loading" | "not-found" | "analyzing-photo";
 
 interface LookupResult {
   found: boolean;
-  source?: "local" | "openfoodfacts";
+  source?: "local" | "openfoodfacts" | "web";
   product?: {
     id: string;
     barcode: string;
@@ -49,10 +49,15 @@ export default function ScanPage() {
       if (res.ok) {
         const data: LookupResult = await res.json();
         if (data.found && data.product) {
-          // Store OFF product data in sessionStorage for the product page
+          // Store product data in sessionStorage for the product page
           if (data.source === "openfoodfacts") {
             sessionStorage.setItem(
               `off-product-${barcode}`,
+              JSON.stringify({ ...data.product, needs_analysis: data.needs_analysis })
+            );
+          } else if (data.source === "web") {
+            sessionStorage.setItem(
+              `web-product-${barcode}`,
               JSON.stringify({ ...data.product, needs_analysis: data.needs_analysis })
             );
           }
