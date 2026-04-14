@@ -121,9 +121,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     let product = null;
-    let debugInfo: Record<string, unknown> = {};
+    const debugInfo: Record<string, unknown> = {
+      braveKeySet: !!process.env.BRAVE_SEARCH_API_KEY,
+      braveKeyLength: process.env.BRAVE_SEARCH_API_KEY?.length || 0,
+      geminiKeySet: !!process.env.GOOGLE_AI_API_KEY,
+    };
 
     try {
+      // Test Brave search directly for debugging
+      const { searchProductByName: searchBraveDirect } = await import("@/lib/brave");
+      const braveResult = await searchBraveDirect(name || "", brand);
+      debugInfo.braveResultCount = braveResult?.results?.length || 0;
+      debugInfo.braveRawTextLength = braveResult?.raw_text?.length || 0;
+      if (braveResult && braveResult.results.length > 0) {
+        debugInfo.firstResult = braveResult.results[0]?.title;
+      }
+
       if (barcode) {
         product = await enrichByBarcode(barcode);
       } else if (name) {
@@ -131,10 +144,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
     } catch (enrichError) {
       debugInfo.enrichError = enrichError instanceof Error ? enrichError.message : String(enrichError);
+      debugInfo.enrichStack = enrichError instanceof Error ? enrichError.stack?.split("\n").slice(0, 3) : undefined;
     }
-
-    debugInfo.braveKeySet = !!process.env.BRAVE_SEARCH_API_KEY;
-    debugInfo.geminiKeySet = !!process.env.GOOGLE_AI_API_KEY;
 
     if (!product || product.ingredients.length === 0) {
       return NextResponse.json(
