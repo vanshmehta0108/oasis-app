@@ -13,6 +13,7 @@ interface ScannerProps {
 export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(true);
+  const [manualBarcode, setManualBarcode] = useState("");
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrRef = useRef<unknown>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +104,31 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
         </div>
         <h3 className="text-lg font-semibold text-oasis-text mb-2">Camera Unavailable</h3>
         <p className="text-sm text-oasis-muted leading-relaxed max-w-xs">{error}</p>
+
+        {/* Manual barcode entry */}
+        <div className="w-full max-w-xs mt-6">
+          <p className="text-xs text-oasis-muted mb-2">Or enter barcode manually</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Enter barcode number..."
+              value={manualBarcode}
+              onChange={(e) => setManualBarcode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && manualBarcode && onScan(manualBarcode)}
+              className="flex-1 px-3 py-2.5 rounded-xl bg-oasis-card border border-oasis-border text-sm text-oasis-text placeholder:text-oasis-muted focus:outline-none focus:border-oasis-green/40"
+            />
+            <button
+              onClick={() => manualBarcode && onScan(manualBarcode)}
+              disabled={!manualBarcode}
+              className="px-4 py-2.5 rounded-xl bg-oasis-green text-oasis-black font-semibold text-sm disabled:opacity-50"
+            >
+              Look Up
+            </button>
+          </div>
+        </div>
+
         <button
           onClick={() => { setError(null); setScanning(true); }}
           className="mt-6 px-6 py-2.5 rounded-full bg-oasis-green text-oasis-black font-semibold text-sm"
@@ -152,6 +178,31 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Manual barcode entry below scanner */}
+      <div className="absolute bottom-24 left-0 right-0 flex justify-center px-6">
+        <div className="w-full max-w-xs">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Type barcode number..."
+              value={manualBarcode}
+              onChange={(e) => setManualBarcode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && manualBarcode && onScan(manualBarcode)}
+              className="flex-1 px-3 py-2.5 rounded-xl bg-black/60 backdrop-blur border border-white/20 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-oasis-green/50"
+            />
+            <button
+              onClick={() => manualBarcode && onScan(manualBarcode)}
+              disabled={!manualBarcode}
+              className="px-4 py-2.5 rounded-xl bg-oasis-green text-oasis-black font-semibold text-sm disabled:opacity-50"
+            >
+              Go
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Photo button */}
       <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">

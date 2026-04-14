@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { ToastProvider } from "@/lib/useToast";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -134,6 +135,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-dvh bg-oasis-black text-oasis-text antialiased">
+        <ServiceWorkerRegistration />
         <ToastProvider>
           <a
             href="#main-content"

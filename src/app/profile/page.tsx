@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
 import { products } from "@/lib/mockData";
+import { getScanHistory, getScanCount, type ScanRecord } from "@/lib/scanHistory";
 
 const healthConditions = [
   { name: "Diabetic", icon: "💉" },
@@ -31,6 +32,32 @@ export default function ProfilePage() {
   const [allergies, setAllergies] = useState<string[]>(["Peanuts"]);
   const [allergyInput, setAllergyInput] = useState("");
   const [language, setLanguage] = useState("English");
+  const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
+  const [scanCount, setScanCount] = useState(0);
+
+  // Load profile from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("oasis-profile");
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        if (data.conditions) setSelectedConditions(data.conditions);
+        if (data.allergies) setAllergies(data.allergies);
+        if (data.language) setLanguage(data.language);
+      } catch {}
+    }
+    setScanHistory(getScanHistory());
+    setScanCount(getScanCount());
+  }, []);
+
+  // Save profile to localStorage whenever conditions, allergies, or language change
+  useEffect(() => {
+    localStorage.setItem("oasis-profile", JSON.stringify({
+      conditions: selectedConditions,
+      allergies,
+      language,
+    }));
+  }, [selectedConditions, allergies, language]);
 
   const toggleCondition = (c: string) => {
     setSelectedConditions((prev) =>
@@ -46,8 +73,8 @@ export default function ProfilePage() {
     }
   };
 
-  const recentScans = products.slice(0, 5);
-  const safeProducts = products.filter((p) => p.safety_score >= 70).length;
+  const recentScans = scanHistory.length > 0 ? scanHistory.slice(0, 5) : products.slice(0, 5).map(p => ({ id: p.id, name: p.name, brand: p.brand, score: p.safety_score, grade: p.grade, category: p.category, timestamp: Date.now() }));
+  const safeProducts = scanHistory.length > 0 ? scanHistory.filter((p) => (p.score ?? 0) >= 70).length : products.filter((p) => p.safety_score >= 70).length;
 
   return (
     <div className="gradient-mesh min-h-dvh">
@@ -76,12 +103,12 @@ export default function ProfilePage() {
           <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col items-center p-3 rounded-2xl bg-oasis-card border border-oasis-border">
               <ScanLine size={16} className="text-oasis-green mb-1" />
-              <span className="text-lg font-bold text-oasis-text">{products.length}</span>
+              <span className="text-lg font-bold text-oasis-text">{scanCount || products.length}</span>
               <span className="text-[10px] text-oasis-muted">Total Scans</span>
             </div>
             <div className="flex flex-col items-center p-3 rounded-2xl bg-oasis-card border border-oasis-border">
               <ShieldCheck size={16} className="text-oasis-green mb-1" />
-              <span className="text-lg font-bold text-oasis-text">{products.length}</span>
+              <span className="text-lg font-bold text-oasis-text">{scanHistory.length || products.length}</span>
               <span className="text-[10px] text-oasis-muted">Checked</span>
             </div>
             <div className="flex flex-col items-center p-3 rounded-2xl bg-oasis-card border border-oasis-border">
@@ -219,7 +246,7 @@ export default function ProfilePage() {
                       <p className="text-sm font-medium text-oasis-text truncate">{p.name}</p>
                       <p className="text-[11px] text-oasis-muted">{p.brand}</p>
                     </div>
-                    <ScoreRing score={p.safety_score} grade={p.grade} size="sm" animate={false} />
+                    <ScoreRing score={p.score ?? 0} grade={p.grade ?? "?"} size="sm" animate={false} />
                   </motion.div>
                 </Link>
               ))}

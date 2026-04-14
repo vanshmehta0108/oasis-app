@@ -31,6 +31,7 @@ export default function ScanPage() {
   const router = useRouter();
   const [state, setState] = useState<ScanState>("scanning");
   const [scannedBarcode, setScannedBarcode] = useState("");
+  const [manualBarcode, setManualBarcode] = useState("");
 
   const handleScan = useCallback(async (barcode: string) => {
     // Haptic feedback on successful scan
@@ -66,12 +67,44 @@ export default function ScanPage() {
     }
   }, [router]);
 
-  const handlePhoto = (_base64: string) => {
+  const handlePhoto = async (base64: string) => {
     setState("analyzing-photo");
-    // TODO: Send to /api/analyze with base64 image for label OCR
-    setTimeout(() => {
-      router.push("/product/maggi-noodles");
-    }, 3000);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const productId = data.product?.id || `analyzed-${Date.now()}`;
+        sessionStorage.setItem(`analyzed-${productId}`, JSON.stringify({
+          id: productId,
+          name: data.label_extraction?.product_name || data.product?.name || "Scanned Product",
+          brand: data.label_extraction?.brand || data.product?.brand || "Unknown",
+          category: data.label_extraction?.category_guess || "food",
+          ingredients: data.label_extraction?.ingredients || [],
+          safety_score: data.analysis?.score || null,
+          grade: data.analysis?.grade || null,
+          analysis: data.analysis ? {
+            summary: data.analysis.summary,
+            ingredients: (data.analysis.ingredients || []).map((ing: { name: string; risk_level?: string; risk?: string; explanation: string }) => ({
+              name: ing.name,
+              risk: ing.risk || ing.risk_level || "caution",
+              explanation: ing.explanation,
+            })),
+            warnings: data.analysis.warnings,
+            healthier_alternative: data.analysis.healthier_tip,
+          } : null,
+        }));
+        router.push(`/product/${productId}`);
+      } else {
+        setState("not-found");
+      }
+    } catch (err) {
+      console.error("Photo analysis failed:", err);
+      setState("not-found");
+    }
   };
 
   return (
@@ -175,6 +208,30 @@ export default function ScanPage() {
             <p className="text-sm text-oasis-muted text-center leading-relaxed max-w-xs">
               Barcode <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> isn&apos;t in our database yet. Photograph the label and our AI will analyze it.
             </p>
+            {/* Manual entry */}
+            <div className="w-full max-w-xs mt-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Enter barcode..."
+                  value={manualBarcode}
+                  onChange={(e) => setManualBarcode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && manualBarcode && handleScan(manualBarcode)}
+                  className="flex-1 px-3 py-2.5 rounded-xl bg-oasis-card border border-oasis-border text-sm text-oasis-text placeholder:text-oasis-muted focus:outline-none focus:border-oasis-green/40"
+                />
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => manualBarcode && handleScan(manualBarcode)}
+                  disabled={!manualBarcode}
+                  className="px-4 py-2.5 rounded-xl bg-oasis-green/20 border border-oasis-green/30 text-oasis-green text-sm font-semibold disabled:opacity-50"
+                >
+                  Go
+                </motion.button>
+              </div>
+            </div>
+
             <div className="flex gap-3 mt-2">
               <motion.button
                 whileTap={{ scale: 0.95 }}

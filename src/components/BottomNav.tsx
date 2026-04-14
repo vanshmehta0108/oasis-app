@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Home, Camera, Search, User } from "lucide-react";
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 
 const tabs = [
   { href: "/", icon: Home, label: "Home" },
@@ -14,9 +15,15 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const [visible, setVisible] = useState(false);
 
-  // Hide on scan page for full-screen experience
-  if (pathname === "/scan") return null;
+  useEffect(() => {
+    const onboarded = localStorage.getItem("oasis-onboarded");
+    const onScan = pathname === "/scan";
+    setVisible(!!onboarded && !onScan);
+  }, [pathname]);
+
+  if (!visible) return null;
 
   return (
     <nav

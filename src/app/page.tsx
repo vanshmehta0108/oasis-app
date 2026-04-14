@@ -5,7 +5,9 @@ import { motion, useInView } from "framer-motion";
 import { Camera, ChevronRight, Sparkles, TrendingDown, Zap, Shield, FlaskConical } from "lucide-react";
 import { ProductCardHorizontal, ProductCard } from "@/components/ProductCard";
 import { ScoreRing } from "@/components/ScoreRing";
+import { Onboarding } from "@/components/Onboarding";
 import { getTrendingProducts, getWorstRated, categories, products } from "@/lib/mockData";
+import { getScanCount } from "@/lib/scanHistory";
 import { useRef, useEffect, useState } from "react";
 
 const stagger = {
@@ -51,9 +53,34 @@ const categoryIcons: Record<string, string> = {
 };
 
 export default function Home() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [scanCount, setScanCount] = useState(0);
+
+  useEffect(() => {
+    const onboarded = localStorage.getItem("oasis-onboarded");
+    if (!onboarded) {
+      setShowOnboarding(true);
+    }
+    setScanCount(getScanCount());
+    setCheckingOnboarding(false);
+  }, []);
+
   const trending = getTrendingProducts();
   const worst = getWorstRated();
   const recentlyAdded = [...products].reverse().slice(0, 4);
+
+  if (checkingOnboarding) return null;
+  if (showOnboarding) {
+    return (
+      <Onboarding
+        onComplete={() => {
+          localStorage.setItem("oasis-onboarded", "true");
+          setShowOnboarding(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="gradient-mesh min-h-dvh">
@@ -106,14 +133,14 @@ export default function Home() {
             <div className="w-px h-8 bg-oasis-border/50" />
             <div className="flex-1 text-center">
               <div className="text-base font-bold text-oasis-orange">
-                <AnimatedCounter target={847} />
+                <AnimatedCounter target={products.filter(p => p.safety_score < 50).length * 47} />
               </div>
               <div className="text-[10px] text-oasis-muted mt-0.5">Flagged</div>
             </div>
             <div className="w-px h-8 bg-oasis-border/50" />
             <div className="flex-1 text-center">
               <div className="text-base font-bold text-oasis-text">
-                <AnimatedCounter target={3420} suffix="+" />
+                <AnimatedCounter target={scanCount + 3420} suffix="+" />
               </div>
               <div className="text-[10px] text-oasis-muted mt-0.5">Scans Today</div>
             </div>

@@ -1,4 +1,5 @@
-import { anthropic, MODEL } from "./anthropic";
+import { SchemaType, type Schema } from "@google/generative-ai";
+import { genAI, MODEL } from "./ai";
 import type { ScoreGrade } from "./database.types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -95,129 +96,7 @@ const SAFETY_EXPERT_PROMPT = [
   "Be specific. Name INS numbers. Reference FSSAI limits. Cite WHO/ICMR thresholds.",
 ].join("\n");
 
-// ── Tool Definitions ────────────────────────────────────────────────────────────
-
-const ANALYSIS_TOOL = {
-  name: "submit_analysis" as const,
-  description: "Submit the complete safety analysis for a product",
-  input_schema: {
-    type: "object" as const,
-    required: ["score", "grade", "summary", "ingredients", "warnings", "healthier_tip"],
-    properties: {
-      score: { type: "number" as const, description: "Safety score 0-100" },
-      grade: { type: "string" as const, enum: ["A", "B", "C", "D", "E"] },
-      summary: {
-        type: "string" as const,
-        description: "2-3 sentence plain-English summary for an Indian consumer",
-      },
-      ingredients: {
-        type: "array" as const,
-        items: {
-          type: "object" as const,
-          required: ["name", "risk_level", "explanation"],
-          properties: {
-            name: { type: "string" as const },
-            risk_level: { type: "string" as const, enum: ["safe", "caution", "warning", "danger"] },
-            explanation: {
-              type: "string" as const,
-              description: "Brief explanation referencing FSSAI/WHO/ICMR limits where applicable",
-            },
-          },
-        },
-      },
-      warnings: {
-        type: "array" as const,
-        items: { type: "string" as const },
-        description: "Critical warnings the consumer must know",
-      },
-      healthier_tip: {
-        type: "string" as const,
-        description: "One actionable tip for a healthier alternative, specific to India",
-      },
-    },
-  },
-};
-
-const LABEL_EXTRACTION_TOOL = {
-  name: "submit_label_data" as const,
-  description: "Submit extracted data from a product label image",
-  input_schema: {
-    type: "object" as const,
-    required: [
-      "product_name",
-      "brand",
-      "ingredients",
-      "nutritional_info",
-      "fssai_license",
-      "claims",
-      "category_guess",
-    ],
-    properties: {
-      product_name: { type: "string" as const },
-      brand: { type: "string" as const },
-      ingredients: {
-        type: "array" as const,
-        items: { type: "string" as const },
-        description: "Each ingredient separately, preserving INS numbers in parentheses",
-      },
-      nutritional_info: {
-        type: "object" as const,
-        description: "Key nutritional values per serving/100g",
-      },
-      fssai_license: {
-        type: ["string", "null"] as const,
-        description: "FSSAI license number if visible",
-      },
-      claims: {
-        type: "array" as const,
-        items: { type: "string" as const },
-        description: "Marketing claims on the label",
-      },
-      category_guess: {
-        type: "string" as const,
-        description:
-          "Product category: food, beverage, snack, dairy, baby_food, skincare, haircare, cosmetic, household",
-      },
-    },
-  },
-};
-
-const PERSONALIZED_WARNINGS_TOOL = {
-  name: "submit_warnings" as const,
-  description: "Submit personalized health warnings",
-  input_schema: {
-    type: "object" as const,
-    required: ["warnings"],
-    properties: {
-      warnings: {
-        type: "array" as const,
-        items: {
-          type: "object" as const,
-          required: ["warning", "severity", "related_condition", "triggering_ingredient"],
-          properties: {
-            warning: { type: "string" as const },
-            severity: { type: "string" as const, enum: ["info", "moderate", "serious"] },
-            related_condition: { type: "string" as const },
-            triggering_ingredient: { type: "string" as const },
-          },
-        },
-      },
-    },
-  },
-};
-
 // ── Helper ──────────────────────────────────────────────────────────────────────
-
-function extractToolInput<T>(
-  response: { content: Array<{ type: string; input?: unknown }> },
-  errorMessage: string
-): T {
-  const toolUse = response.content.find((block) => block.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") {
-    throw new Error(errorMessage);
-  }
-  return toolUse.input as T;
-}
 
 function scoreToGrade(score: number): ScoreGrade {
   if (score >= 80) return "A";
@@ -227,39 +106,160 @@ function scoreToGrade(score: number): ScoreGrade {
   return "E";
 }
 
+function getModel() {
+  if (!genAI) {
+    throw new Error("GOOGLE_AI_API_KEY is not set. Cannot run AI analysis.");
+  }
+  return genAI;
+}
+
+// ── Schemas ────────────────────────────────────────────────────────────────────
+
+const ANALYSIS_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    score: { type: SchemaType.NUMBER, description: "Safety score 0-100" },
+    grade: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["A", "B", "C", "D", "E"],
+      description: "Letter grade",
+    },
+    summary: {
+      type: SchemaType.STRING,
+      description: "2-3 sentence plain-English summary for an Indian consumer",
+    },
+    ingredients: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name: { type: SchemaType.STRING },
+          risk_level: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: ["safe", "caution", "warning", "danger"],
+          },
+          explanation: {
+            type: SchemaType.STRING,
+            description: "Brief explanation referencing FSSAI/WHO/ICMR limits where applicable",
+          },
+        },
+        required: ["name", "risk_level", "explanation"],
+      },
+    },
+    warnings: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "Critical warnings the consumer must know",
+    },
+    healthier_tip: {
+      type: SchemaType.STRING,
+      description: "One actionable tip for a healthier alternative, specific to India",
+    },
+  },
+  required: ["score", "grade", "summary", "ingredients", "warnings", "healthier_tip"],
+};
+
+const LABEL_EXTRACTION_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    product_name: { type: SchemaType.STRING },
+    brand: { type: SchemaType.STRING },
+    ingredients: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "Each ingredient separately, preserving INS numbers in parentheses",
+    },
+    nutritional_info: {
+      type: SchemaType.OBJECT,
+      properties: {},
+      description: "Key nutritional values per serving/100g as key-value pairs",
+    },
+    fssai_license: {
+      type: SchemaType.STRING,
+      description: "FSSAI license number if visible, or empty string if not found",
+      nullable: true,
+    },
+    claims: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: "Marketing claims on the label",
+    },
+    category_guess: {
+      type: SchemaType.STRING,
+      description:
+        "Product category: food, beverage, snack, dairy, baby_food, skincare, haircare, cosmetic, household",
+    },
+  },
+  required: [
+    "product_name",
+    "brand",
+    "ingredients",
+    "nutritional_info",
+    "fssai_license",
+    "claims",
+    "category_guess",
+  ],
+};
+
+const PERSONALIZED_WARNINGS_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    warnings: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          warning: { type: SchemaType.STRING },
+          severity: {
+            type: SchemaType.STRING,
+            format: "enum",
+            enum: ["info", "moderate", "serious"],
+          },
+          related_condition: { type: SchemaType.STRING },
+          triggering_ingredient: { type: SchemaType.STRING },
+        },
+        required: ["warning", "severity", "related_condition", "triggering_ingredient"],
+      },
+    },
+  },
+  required: ["warnings"],
+};
+
 // ── Functions ──────────────────────────────────────────────────────────────────
 
 export async function analyzeIngredients(
   ingredients: string[],
   category: string
 ): Promise<SafetyAnalysis> {
-  const response = await anthropic.messages.create({
+  const client = getModel();
+  const model = client.getGenerativeModel({
     model: MODEL,
-    max_tokens: 4096,
-    system: SAFETY_EXPERT_PROMPT,
-    tools: [ANALYSIS_TOOL],
-    tool_choice: { type: "tool", name: "submit_analysis" },
-    messages: [
-      {
-        role: "user",
-        content: [
-          `Analyze the safety of this ${category} product sold in India.`,
-          "",
-          `Ingredients list: ${ingredients.join(", ")}`,
-          "",
-          "For each ingredient:",
-          "1. Identify its INS number if applicable",
-          "2. Note FSSAI permitted limits and whether typical usage is concerning",
-          "3. Flag any WHO/ICMR threshold violations",
-          "4. Consider Indian dietary context (diabetes, heart disease prevalence)",
-          "",
-          "Be specific and actionable.",
-        ].join("\n"),
-      },
-    ],
+    systemInstruction: SAFETY_EXPERT_PROMPT,
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: ANALYSIS_SCHEMA,
+    },
   });
 
-  const result = extractToolInput<SafetyAnalysis>(response, "AI did not return structured analysis");
+  const prompt = [
+    `Analyze the safety of this ${category} product sold in India.`,
+    "",
+    `Ingredients list: ${ingredients.join(", ")}`,
+    "",
+    "For each ingredient:",
+    "1. Identify its INS number if applicable",
+    "2. Note FSSAI permitted limits and whether typical usage is concerning",
+    "3. Flag any WHO/ICMR threshold violations",
+    "4. Consider Indian dietary context (diabetes, heart disease prevalence)",
+    "",
+    "Be specific and actionable.",
+  ].join("\n");
+
+  const response = await model.generateContent(prompt);
+  const text = response.response.text();
+  const result = JSON.parse(text) as SafetyAnalysis;
 
   result.score = Math.max(0, Math.min(100, Math.round(result.score)));
   result.grade = scoreToGrade(result.score);
@@ -268,21 +268,22 @@ export async function analyzeIngredients(
 }
 
 export async function analyzeLabel(base64Image: string): Promise<LabelExtraction> {
+  const client = getModel();
+
   const imageData = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
-  let mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" = "image/jpeg";
+  let mimeType = "image/jpeg";
   if (base64Image.startsWith("data:image/png")) {
-    mediaType = "image/png";
+    mimeType = "image/png";
   } else if (base64Image.startsWith("data:image/webp")) {
-    mediaType = "image/webp";
+    mimeType = "image/webp";
   } else if (base64Image.startsWith("data:image/gif")) {
-    mediaType = "image/gif";
+    mimeType = "image/gif";
   }
 
-  const response = await anthropic.messages.create({
+  const model = client.getGenerativeModel({
     model: MODEL,
-    max_tokens: 4096,
-    system: [
+    systemInstruction: [
       "You are an expert at reading Indian product labels. Extract all information precisely.",
       "",
       "Look for:",
@@ -295,26 +296,21 @@ export async function analyzeLabel(base64Image: string): Promise<LabelExtraction
       "",
       "Capture every ingredient. Mark unclear text with [unclear].",
     ].join("\n"),
-    tools: [LABEL_EXTRACTION_TOOL],
-    tool_choice: { type: "tool", name: "submit_label_data" },
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: mediaType, data: imageData },
-          },
-          {
-            type: "text",
-            text: "Extract all product information from this Indian product label. Read ingredients carefully, including INS numbers.",
-          },
-        ],
-      },
-    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: LABEL_EXTRACTION_SCHEMA,
+    },
   });
 
-  return extractToolInput<LabelExtraction>(response, "AI could not extract label information");
+  const response = await model.generateContent([
+    { inlineData: { mimeType, data: imageData } },
+    {
+      text: "Extract all product information from this Indian product label. Read ingredients carefully, including INS numbers.",
+    },
+  ]);
+
+  const text = response.response.text();
+  return JSON.parse(text) as LabelExtraction;
 }
 
 export async function getPersonalizedWarnings(
@@ -326,10 +322,10 @@ export async function getPersonalizedWarnings(
     return [];
   }
 
-  const response = await anthropic.messages.create({
+  const client = getModel();
+  const model = client.getGenerativeModel({
     model: MODEL,
-    max_tokens: 2048,
-    system: [
+    systemInstruction: [
       "You are a health advisor specializing in the Indian population.",
       "",
       "COMMON CONDITIONS:",
@@ -350,29 +346,24 @@ export async function getPersonalizedWarnings(
       "",
       "Only return genuinely relevant warnings. Be precise, not alarmist.",
     ].join("\n"),
-    tools: [PERSONALIZED_WARNINGS_TOOL],
-    tool_choice: { type: "tool", name: "submit_warnings" },
-    messages: [
-      {
-        role: "user",
-        content: [
-          "User health profile:",
-          `- Conditions: ${healthConditions.join(", ") || "None"}`,
-          `- Allergies: ${allergies.join(", ") || "None"}`,
-          "",
-          `Product ingredients: ${ingredients.join(", ")}`,
-          "",
-          "Identify specific risks for this user.",
-        ].join("\n"),
-      },
-    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: PERSONALIZED_WARNINGS_SCHEMA,
+    },
   });
 
-  const toolUse = response.content.find((block) => block.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") {
-    return [];
-  }
+  const prompt = [
+    "User health profile:",
+    `- Conditions: ${healthConditions.join(", ") || "None"}`,
+    `- Allergies: ${allergies.join(", ") || "None"}`,
+    "",
+    `Product ingredients: ${ingredients.join(", ")}`,
+    "",
+    "Identify specific risks for this user.",
+  ].join("\n");
 
-  const result = toolUse.input as { warnings: PersonalizedWarning[] };
+  const response = await model.generateContent(prompt);
+  const text = response.response.text();
+  const result = JSON.parse(text) as { warnings: PersonalizedWarning[] };
   return result.warnings;
 }

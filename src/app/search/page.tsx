@@ -8,6 +8,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { searchProducts, type Product } from "@/lib/mockData";
 import { Search, TrendingUp, Globe, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { SkeletonSearchResults } from "@/components/Skeleton";
 
 const popularSearches = ["Maggi", "Bournvita", "Kurkure", "Sunscreen", "Baby food", "Atta"];
 
@@ -146,6 +147,8 @@ function SearchContent() {
               </div>
             </motion.div>
           </motion.div>
+        ) : offLoading && results.length === 0 ? (
+          <SkeletonSearchResults />
         ) : results.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
