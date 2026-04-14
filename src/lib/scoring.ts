@@ -1,5 +1,5 @@
 import { SchemaType, type Schema } from "@google/generative-ai";
-import { genAI, MODEL } from "./ai";
+import { getGenAI, MODEL } from "./ai";
 import type { ScoreGrade } from "./database.types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -107,10 +107,11 @@ function scoreToGrade(score: number): ScoreGrade {
 }
 
 function getModel() {
-  if (!genAI) {
+  const client = getGenAI();
+  if (!client) {
     throw new Error("GOOGLE_AI_API_KEY is not set. Cannot run AI analysis.");
   }
-  return genAI;
+  return client;
 }
 
 // ── Schemas ────────────────────────────────────────────────────────────────────

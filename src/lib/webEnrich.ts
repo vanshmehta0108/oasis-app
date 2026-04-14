@@ -4,7 +4,7 @@
 // Gemini to extract structured product info from search result snippets.
 
 import { SchemaType, type Schema } from "@google/generative-ai";
-import { genAI, MODEL } from "./ai";
+import { getGenAI, MODEL } from "./ai";
 import { searchProductByBarcode, searchProductByName } from "./brave";
 
 export interface EnrichedProduct {
@@ -53,13 +53,14 @@ async function extractProductFromText(
   searchText: string,
   hint: string
 ): Promise<EnrichedProduct | null> {
-  if (!genAI) {
+  const client = getGenAI();
+  if (!client) {
     console.warn("Gemini not available — cannot extract product data");
     return null;
   }
 
   try {
-    const model = genAI.getGenerativeModel({
+    const model = client.getGenerativeModel({
       model: MODEL,
       systemInstruction: [
         "You are an expert at extracting product information from web search snippets.",
