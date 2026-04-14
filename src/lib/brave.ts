@@ -46,7 +46,8 @@ export async function searchBrave(
     });
 
     if (!res.ok) {
-      console.error(`Brave search failed: ${res.status} ${res.statusText}`);
+      const errorText = await res.text().catch(() => "");
+      console.error(`Brave search failed: ${res.status} ${res.statusText}`, errorText);
       return null;
     }
 

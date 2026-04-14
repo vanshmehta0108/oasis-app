@@ -137,17 +137,33 @@ export async function enrichByName(
   name: string,
   brand?: string
 ): Promise<EnrichedProduct | null> {
+  console.log(`[enrich] Searching Brave for: ${brand ? `${brand} ${name}` : name}`);
   const searchResult = await searchProductByName(name, brand);
-  if (!searchResult || searchResult.results.length === 0) return null;
+
+  if (!searchResult) {
+    console.log("[enrich] Brave search returned null");
+    return null;
+  }
+
+  if (searchResult.results.length === 0) {
+    console.log("[enrich] Brave search returned 0 results");
+    return null;
+  }
+
+  console.log(`[enrich] Brave returned ${searchResult.results.length} results, extracting with AI...`);
 
   const product = await extractProductFromText(
     searchResult.raw_text,
     brand ? `${brand} ${name}` : name
   );
 
-  if (product) {
-    product.source_urls = searchResult.results.map((r) => r.url);
+  if (!product) {
+    console.log("[enrich] AI extraction returned null");
+    return null;
   }
+
+  console.log(`[enrich] Extracted: ${product.name} with ${product.ingredients.length} ingredients`);
+  product.source_urls = searchResult.results.map((r) => r.url);
 
   return product;
 }
