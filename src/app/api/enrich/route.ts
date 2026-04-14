@@ -121,12 +121,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     let product = null;
+    let debugInfo: Record<string, unknown> = {};
 
-    if (barcode) {
-      product = await enrichByBarcode(barcode);
-    } else if (name) {
-      product = await enrichByName(name, brand);
+    try {
+      if (barcode) {
+        product = await enrichByBarcode(barcode);
+      } else if (name) {
+        product = await enrichByName(name, brand);
+      }
+    } catch (enrichError) {
+      debugInfo.enrichError = enrichError instanceof Error ? enrichError.message : String(enrichError);
     }
+
+    debugInfo.braveKeySet = !!process.env.BRAVE_SEARCH_API_KEY;
+    debugInfo.geminiKeySet = !!process.env.GOOGLE_AI_API_KEY;
 
     if (!product || product.ingredients.length === 0) {
       return NextResponse.json(
@@ -134,6 +142,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           found: false,
           message: `Could not find product details for: ${name || barcode}`,
           product: product || null,
+          debug: debugInfo,
         },
         { status: 404, headers: corsHeaders() }
       );
