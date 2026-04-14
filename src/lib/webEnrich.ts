@@ -146,8 +146,12 @@ function fastExtractIngredients(
       const ingredients = rawList
         .split(/[,;]/)
         .map((s) => s.trim())
+        .map((s) => s.replace(/\s*\(.*?\)\s*/g, "").trim()) // remove parentheticals
         .filter((s) => s.length > 1 && s.length < 80)
         .filter((s) => !/^\d+$/.test(s)) // skip pure numbers
+        .filter((s) => !/^en:/i.test(s)) // skip OFF format codes (en:503, en:472e)
+        .filter((s) => !/^[a-z]{2}:/i.test(s)) // skip any locale-prefixed codes
+        .filter((s) => !/⚠|warning|fiber|sugar.*specified/i.test(s)) // skip warnings
         .filter((s) => !/^(and|or|the|with|in|of|a|an)$/i.test(s)); // skip connectors
 
       if (ingredients.length > bestIngredients.length) {
@@ -166,10 +170,13 @@ function fastExtractIngredients(
   // Guess category from ingredients
   let category = "food";
   const lowerText = text.toLowerCase();
-  if (lowerText.includes("shampoo") || lowerText.includes("cream") || lowerText.includes("lotion")) category = "skincare";
-  else if (lowerText.includes("beverage") || lowerText.includes("juice") || lowerText.includes("drink")) category = "beverage";
-  else if (lowerText.includes("snack") || lowerText.includes("chips") || lowerText.includes("namkeen")) category = "snack";
-  else if (lowerText.includes("baby") || lowerText.includes("infant")) category = "baby";
+  if (lowerText.includes("shampoo") || lowerText.includes("cream") || lowerText.includes("lotion") || lowerText.includes("face wash")) category = "skincare";
+  else if (lowerText.includes("juice") || lowerText.includes("cold drink") || lowerText.includes("soft drink") || lowerText.includes("soda")) category = "beverage";
+  else if (lowerText.includes("snack") || lowerText.includes("chips") || lowerText.includes("namkeen") || lowerText.includes("bhujia")) category = "snack";
+  else if (lowerText.includes("biscuit") || lowerText.includes("cookie") || lowerText.includes("rusk")) category = "snack";
+  else if (lowerText.includes("noodle") || lowerText.includes("pasta") || lowerText.includes("maggi")) category = "food";
+  else if (lowerText.includes("baby") || lowerText.includes("infant") || lowerText.includes("cerelac")) category = "baby";
+  else if (lowerText.includes("detergent") || lowerText.includes("cleaner") || lowerText.includes("dishwash")) category = "household";
 
   return {
     name,
