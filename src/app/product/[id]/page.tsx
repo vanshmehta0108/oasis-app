@@ -8,7 +8,8 @@ import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
 import { ScoreRing } from "@/components/ScoreRing";
 import { IngredientList } from "@/components/IngredientList";
-import { getProductById, type Product as MockProduct, type IngredientAnalysis } from "@/lib/mockData";
+import type { IngredientAnalysis } from "@/lib/mockData";
+import { getProductByBarcode as getDbProduct } from "@/lib/db";
 import { recordScan } from "@/lib/scanHistory";
 
 interface ProductData {
@@ -53,20 +54,6 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.33, 1, 0.68, 1] as const } },
 };
 
-function mapMockToProductData(p: MockProduct): ProductData {
-  return {
-    id: p.id,
-    name: p.name,
-    brand: p.brand,
-    category: p.category,
-    ingredients: p.ingredients,
-    safety_score: p.safety_score,
-    grade: p.grade,
-    image_url: p.image_url,
-    analysis: p.analysis,
-  };
-}
-
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [product, setProduct] = useState<ProductData | null>(null);
@@ -104,14 +91,43 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   }, [product, score, grade]);
 
   useEffect(() => {
-    // Try mock data first
-    const mockProduct = getProductById(id);
-    if (mockProduct) {
-      setProduct(mapMockToProductData(mockProduct));
-      recordScan(mockProduct);
-      return;
-    }
+    // 1. Try Supabase DB first (by barcode since our IDs are barcodes)
+    getDbProduct(id).then((dbProduct) => {
+      if (dbProduct) {
+        const analysis = dbProduct.analysis as unknown as Record<string, unknown> | null;
+        setProduct({
+          id: dbProduct.barcode,
+          name: dbProduct.name,
+          brand: dbProduct.brand,
+          category: dbProduct.category as string,
+          ingredients: dbProduct.ingredients,
+          safety_score: dbProduct.safety_score,
+          grade: dbProduct.score_grade,
+          image_url: dbProduct.image_url || undefined,
+          analysis: analysis
+            ? {
+                summary: (analysis.summary as string) || "",
+                ingredients: ((analysis.ingredients as Array<{ name: string; risk?: string; risk_level?: string; explanation: string }>) || []).map((ing) => ({
+                  name: ing.name,
+                  risk: (ing.risk || ing.risk_level || "caution") as IngredientAnalysis["risk"],
+                  explanation: ing.explanation,
+                })),
+                warnings: (analysis.warnings as string[]) || [],
+                healthier_alternative: (analysis.healthier_alternative as string) || (analysis.healthier_tip as string) || "",
+              }
+            : undefined,
+        });
+        recordScan({ id: dbProduct.barcode, name: dbProduct.name, brand: dbProduct.brand, category: dbProduct.category as string });
+        return;
+      }
 
+      // 2. Not in DB — continue with OFF / web / sessionStorage lookups
+      loadExternalProduct();
+    }).catch(() => {
+      loadExternalProduct();
+    });
+
+    function loadExternalProduct() {
     // Check sessionStorage for OFF product, or fetch from OFF API directly
     if (id.startsWith("off-")) {
       const barcode = id.replace("off-", "");
@@ -268,6 +284,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     }
 
     setNotFoundState(true);
+    } // end loadExternalProduct
   }, [id]);
 
   if (notFoundState) {

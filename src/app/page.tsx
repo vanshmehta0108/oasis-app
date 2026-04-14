@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { motion, useInView } from "framer-motion";
 import { Camera, ChevronRight, Sparkles, TrendingDown, Zap, Shield, FlaskConical } from "lucide-react";
-import { ProductCardHorizontal, ProductCard } from "@/components/ProductCard";
+import { ProductCard } from "@/components/ProductCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Onboarding } from "@/components/Onboarding";
-import { getTrendingProducts, getWorstRated, categories, products } from "@/lib/mockData";
+import { categories } from "@/lib/mockData";
+import type { Product } from "@/lib/mockData";
+import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
 import { getScanCount } from "@/lib/scanHistory";
 import { useRef, useEffect, useState } from "react";
 
@@ -52,10 +54,40 @@ const categoryIcons: Record<string, string> = {
   Household: "🏠",
 };
 
+// Map DB row to frontend Product shape
+function mapDbProduct(p: Record<string, unknown>): Product {
+  const analysis = p.analysis as Record<string, unknown> | null;
+  return {
+    id: (p.barcode as string) || (p.id as string),
+    barcode: (p.barcode as string) || "",
+    name: (p.name as string) || "",
+    brand: (p.brand as string) || "Unknown",
+    category: (p.category as string) || "food",
+    ingredients: (p.ingredients as string[]) || [],
+    safety_score: (p.safety_score as number) || 0,
+    grade: ((p.score_grade as string) || "C") as Product["grade"],
+    image_url: (p.image_url as string) || "",
+    analysis: analysis
+      ? {
+          summary: (analysis.summary as string) || "",
+          ingredients: [],
+          warnings: (analysis.warnings as string[]) || [],
+          healthier_alternative: (analysis.healthier_alternative as string) || "",
+        }
+      : { summary: "", ingredients: [], warnings: [], healthier_alternative: "" },
+  };
+}
+
 export default function Home() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [scanCount, setScanCount] = useState(0);
+  const [trending, setTrending] = useState<Product[]>([]);
+  const [worst, setWorst] = useState<Product[]>([]);
+  const [recentlyAdded, setRecentlyAdded] = useState<Product[]>([]);
+  const [productCount, setProductCount] = useState(0);
+  const [flaggedCount, setFlaggedCount] = useState(0);
+  const [catCounts, setCatCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const onboarded = localStorage.getItem("oasis-onboarded");
@@ -64,11 +96,15 @@ export default function Home() {
     }
     setScanCount(getScanCount());
     setCheckingOnboarding(false);
-  }, []);
 
-  const trending = getTrendingProducts();
-  const worst = getWorstRated();
-  const recentlyAdded = [...products].reverse().slice(0, 4);
+    // Fetch data from Supabase
+    getTrendingProducts(6).then((data) => setTrending(data.map((d) => mapDbProduct(d as unknown as Record<string, unknown>))));
+    getWorstRated(4).then((data) => setWorst(data.map((d) => mapDbProduct(d as unknown as Record<string, unknown>))));
+    getRecentProducts(4).then((data) => setRecentlyAdded(data.map((d) => mapDbProduct(d as unknown as Record<string, unknown>))));
+    getProductCount().then(setProductCount);
+    getFlaggedCount().then(setFlaggedCount);
+    getCategoryCounts().then(setCatCounts);
+  }, []);
 
   if (checkingOnboarding) return null;
   if (showOnboarding) {
@@ -81,6 +117,23 @@ export default function Home() {
       />
     );
   }
+
+  // Map category counts to display format
+  const categoryMap: Record<string, string> = {
+    food: "Food",
+    beverage: "Beverages",
+    snack: "Snacks",
+    skincare: "Skincare",
+    baby_food: "Baby",
+    household: "Household",
+  };
+  const displayCategories = categories.map((cat) => {
+    const dbKeys = Object.entries(categoryMap)
+      .filter(([, display]) => display === cat.name)
+      .map(([key]) => key);
+    const count = dbKeys.reduce((sum, key) => sum + (catCounts[key] || 0), 0);
+    return { ...cat, count };
+  });
 
   return (
     <div className="gradient-mesh min-h-dvh">
@@ -126,14 +179,14 @@ export default function Home() {
           <div className="flex items-center justify-between px-1 py-3 rounded-2xl bg-oasis-card/60 border border-oasis-border/50">
             <div className="flex-1 text-center">
               <div className="text-base font-bold text-oasis-green">
-                <AnimatedCounter target={products.length * 142} />
+                <AnimatedCounter target={productCount || 0} />
               </div>
               <div className="text-[10px] text-oasis-muted mt-0.5">Products</div>
             </div>
             <div className="w-px h-8 bg-oasis-border/50" />
             <div className="flex-1 text-center">
               <div className="text-base font-bold text-oasis-orange">
-                <AnimatedCounter target={products.filter(p => p.safety_score < 50).length * 47} />
+                <AnimatedCounter target={flaggedCount || 0} />
               </div>
               <div className="text-[10px] text-oasis-muted mt-0.5">Flagged</div>
             </div>
@@ -148,93 +201,97 @@ export default function Home() {
         </motion.div>
 
         {/* Trending Scans */}
-        <motion.div variants={fadeUp} className="mb-6">
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              <Zap size={14} className="text-oasis-green" />
-              <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-                Trending Scans
-              </h2>
+        {trending.length > 0 && (
+          <motion.div variants={fadeUp} className="mb-6">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <Zap size={14} className="text-oasis-green" />
+                <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
+                  Trending Scans
+                </h2>
+              </div>
+              <Link href="/search" className="flex items-center gap-0.5 text-[11px] text-oasis-green font-medium">
+                See all <ChevronRight size={13} />
+              </Link>
             </div>
-            <Link href="/search" className="flex items-center gap-0.5 text-[11px] text-oasis-green font-medium">
-              See all <ChevronRight size={13} />
-            </Link>
-          </div>
-          <div className="flex gap-2.5 overflow-x-auto hide-scrollbar scroll-snap-x pb-1 -mx-1 px-1">
-            {trending.map((p, i) => (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 + i * 0.06, duration: 0.4 }}
-              >
-                <Link href={`/product/${p.id}`}>
-                  <motion.div
-                    whileTap={{ scale: 0.96 }}
-                    className="w-[130px] shrink-0 p-3 rounded-2xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors relative overflow-hidden"
-                  >
-                    <div className="text-3xl text-center mb-2">
-                      {categoryIcons[p.category] || "📦"}
-                    </div>
-                    <div className="flex justify-center mb-1.5">
-                      <ScoreRing score={p.safety_score} grade={p.grade} size="sm" animate={false} />
-                    </div>
-                    <h3 className="text-[11px] font-semibold text-oasis-text truncate text-center">
-                      {p.name}
-                    </h3>
-                    <p className="text-[10px] text-oasis-muted text-center mt-0.5">
-                      {p.brand}
-                    </p>
-                  </motion.div>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Worst Rated — dramatic red tint */}
-        <motion.div variants={fadeUp} className="mb-6">
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              <TrendingDown size={14} className="text-oasis-red" />
-              <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-                Worst Rated This Week
-              </h2>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {worst.map((p, i) => (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 0, x: -16 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 + i * 0.06, duration: 0.4 }}
-              >
-                <Link href={`/product/${p.id}`}>
-                  <motion.div
-                    whileTap={{ scale: 0.97 }}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-red-950/20 border border-red-400/10 hover:border-red-400/20 transition-all relative overflow-hidden"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-red-500/[0.04] to-transparent pointer-events-none" />
-                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-400/10 text-lg shrink-0">
-                      {categoryIcons[p.category] || "📦"}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-[13px] font-semibold text-oasis-text truncate">{p.name}</h3>
-                      <p className="text-[11px] text-oasis-muted">{p.brand}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-red-400">{p.safety_score}</span>
-                      <div className="w-8 h-8 rounded-full border-2 border-red-400/30 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-red-400">{p.grade}</span>
+            <div className="flex gap-2.5 overflow-x-auto hide-scrollbar scroll-snap-x pb-1 -mx-1 px-1">
+              {trending.map((p, i) => (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + i * 0.06, duration: 0.4 }}
+                >
+                  <Link href={`/product/${p.id}`}>
+                    <motion.div
+                      whileTap={{ scale: 0.96 }}
+                      className="w-[130px] shrink-0 p-3 rounded-2xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors relative overflow-hidden"
+                    >
+                      <div className="text-3xl text-center mb-2">
+                        {categoryIcons[p.category] || "📦"}
                       </div>
-                    </div>
-                  </motion.div>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
+                      <div className="flex justify-center mb-1.5">
+                        <ScoreRing score={p.safety_score} grade={p.grade} size="sm" animate={false} />
+                      </div>
+                      <h3 className="text-[11px] font-semibold text-oasis-text truncate text-center">
+                        {p.name}
+                      </h3>
+                      <p className="text-[10px] text-oasis-muted text-center mt-0.5">
+                        {p.brand}
+                      </p>
+                    </motion.div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Worst Rated */}
+        {worst.length > 0 && (
+          <motion.div variants={fadeUp} className="mb-6">
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <TrendingDown size={14} className="text-oasis-red" />
+                <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
+                  Worst Rated This Week
+                </h2>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {worst.map((p, i) => (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + i * 0.06, duration: 0.4 }}
+                >
+                  <Link href={`/product/${p.id}`}>
+                    <motion.div
+                      whileTap={{ scale: 0.97 }}
+                      className="flex items-center gap-3 p-3 rounded-2xl bg-red-950/20 border border-red-400/10 hover:border-red-400/20 transition-all relative overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/[0.04] to-transparent pointer-events-none" />
+                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-400/10 text-lg shrink-0">
+                        {categoryIcons[p.category] || "📦"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-[13px] font-semibold text-oasis-text truncate">{p.name}</h3>
+                        <p className="text-[11px] text-oasis-muted">{p.brand}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-red-400">{p.safety_score}</span>
+                        <div className="w-8 h-8 rounded-full border-2 border-red-400/30 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-red-400">{p.grade}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Categories */}
         <motion.div variants={fadeUp} className="mb-6">
@@ -245,7 +302,7 @@ export default function Home() {
             </h2>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {categories.map((cat, i) => (
+            {displayCategories.map((cat, i) => (
               <Link key={cat.name} href={`/search?category=${cat.name}`}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -265,19 +322,34 @@ export default function Home() {
         </motion.div>
 
         {/* Recently Added */}
-        <motion.div variants={fadeUp}>
-          <div className="flex items-center gap-2 mb-2.5">
-            <Shield size={14} className="text-oasis-green" />
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-              Recently Added
+        {recentlyAdded.length > 0 && (
+          <motion.div variants={fadeUp}>
+            <div className="flex items-center gap-2 mb-2.5">
+              <Shield size={14} className="text-oasis-green" />
+              <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
+                Recently Added
+              </h2>
+            </div>
+            <div className="space-y-2">
+              {recentlyAdded.map((p, i) => (
+                <ProductCard key={p.id} product={p} index={i} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Empty state when no products yet */}
+        {productCount === 0 && !trending.length && (
+          <motion.div variants={fadeUp} className="text-center py-12">
+            <span className="text-5xl mb-4 block">🌱</span>
+            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-2">
+              Start Scanning!
             </h2>
-          </div>
-          <div className="space-y-2">
-            {recentlyAdded.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
-            ))}
-          </div>
-        </motion.div>
+            <p className="text-sm text-oasis-muted max-w-xs mx-auto">
+              Scan your first product barcode to build your safety database. Every scan makes Oasis smarter.
+            </p>
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );

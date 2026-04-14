@@ -10,6 +10,8 @@ import type { Product, ProductInsert, ProductCategory } from "@/lib/database.typ
 
 const AnalyzeRequest = z.object({
   barcode: z.string().min(1, "Barcode cannot be empty").optional(),
+  name: z.string().optional(),
+  brand: z.string().optional(),
   ingredients: z.array(z.string().min(1)).min(1, "Ingredients list cannot be empty").optional(),
   image: z.string().min(100, "Image data is too short to be valid").optional(),
   category: z.string().default("food"),
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return errorResponse("Invalid request", 400, firstIssue?.message);
     }
 
-    const { barcode, ingredients, image, category } = parsed.data;
+    const { barcode, name: productName, brand: productBrand, ingredients, image, category } = parsed.data;
 
     if (!ingredients && !image && !barcode) {
       return errorResponse("Provide at least one of: barcode, ingredients, or image", 400);
@@ -97,8 +99,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (barcode) {
       const productData: ProductInsert = {
         barcode,
-        name: labelData?.product_name ?? "Unknown Product",
-        brand: labelData?.brand ?? "Unknown Brand",
+        name: productName || labelData?.product_name || "Unknown Product",
+        brand: productBrand || labelData?.brand || "Unknown Brand",
         category: category as ProductCategory,
         ingredients: finalIngredients,
         nutritional_info: labelData?.nutritional_info ?? {},

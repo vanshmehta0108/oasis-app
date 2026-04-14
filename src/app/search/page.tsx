@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { SearchBar } from "@/components/SearchBar";
 import { ProductCard } from "@/components/ProductCard";
-import { searchProducts, type Product } from "@/lib/mockData";
-import { Search, TrendingUp, Globe, Loader2 } from "lucide-react";
+import type { Product } from "@/lib/mockData";
+import { searchProducts as searchSupabase } from "@/lib/db";
+import { Search, TrendingUp, Globe, Loader2, Database } from "lucide-react";
 import Link from "next/link";
 import { SkeletonSearchResults } from "@/components/Skeleton";
 
@@ -35,11 +36,36 @@ interface OFFResult {
   analysis: { summary: string; ingredients: []; warnings: []; healthier_alternative: string };
 }
 
+function mapDbToProduct(p: Record<string, unknown>): Product {
+  const analysis = p.analysis as Record<string, unknown> | null;
+  return {
+    id: (p.barcode as string) || (p.id as string),
+    barcode: (p.barcode as string) || "",
+    name: (p.name as string) || "",
+    brand: (p.brand as string) || "Unknown",
+    category: (p.category as string) || "food",
+    ingredients: (p.ingredients as string[]) || [],
+    safety_score: (p.safety_score as number) || 0,
+    grade: ((p.score_grade as string) || "C") as Product["grade"],
+    image_url: (p.image_url as string) || "",
+    analysis: analysis
+      ? {
+          summary: (analysis.summary as string) || "",
+          ingredients: [],
+          warnings: (analysis.warnings as string[]) || [],
+          healthier_alternative: (analysis.healthier_alternative as string) || "",
+        }
+      : { summary: "Tap to analyze", ingredients: [], warnings: [], healthier_alternative: "" },
+  };
+}
+
 function SearchContent() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") || "All";
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory);
+  const [dbResults, setDbResults] = useState<Product[]>([]);
+  const [dbLoading, setDbLoading] = useState(false);
   const [offResults, setOffResults] = useState<OFFResult[]>([]);
   const [offLoading, setOffLoading] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout>(null);
@@ -47,17 +73,29 @@ function SearchContent() {
   const handleSearch = useCallback((q: string) => setQuery(q), []);
   const handleCategory = useCallback((c: string) => setCategory(c), []);
 
-  const localResults = searchProducts(query, category);
-
-  // Search Open Food Facts with debounce
+  // Search Supabase + Open Food Facts with debounce
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query || query.length < 3) {
+    if (!query || query.length < 2) {
+      setDbResults([]);
       setOffResults([]);
       return;
     }
     debounceRef.current = setTimeout(async () => {
+      setDbLoading(true);
       setOffLoading(true);
+
+      // Search Supabase (our DB)
+      try {
+        const supaResults = await searchSupabase(query, category === "All" ? undefined : category);
+        setDbResults(supaResults.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
+      } catch {
+        setDbResults([]);
+      } finally {
+        setDbLoading(false);
+      }
+
+      // Search Open Food Facts
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags=en:india&json=1&page_size=10&fields=code,product_name,brands,categories,ingredients_text,image_url`;
         const res = await fetch(url);
@@ -84,14 +122,15 @@ function SearchContent() {
       } finally {
         setOffLoading(false);
       }
-    }, 500);
+    }, 400);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query]);
+  }, [query, category]);
 
-  // Combine results — local first, then OFF (excluding duplicates)
-  const localIds = new Set(localResults.map((p) => p.barcode));
-  const uniqueOff = offResults.filter((p) => !localIds.has(p.barcode));
-  const results: Product[] = [...localResults, ...uniqueOff as unknown as Product[]];
+  // Combine results — DB first, then OFF (excluding duplicates by barcode)
+  const dbBarcodes = new Set(dbResults.map((p) => p.barcode));
+  const uniqueOff = offResults.filter((p) => !dbBarcodes.has(p.barcode));
+  const results: Product[] = [...dbResults, ...uniqueOff as unknown as Product[]];
+  const isLoading = dbLoading || offLoading;
   const showEmpty = !query && category === "All";
 
   return (
@@ -147,9 +186,9 @@ function SearchContent() {
               </div>
             </motion.div>
           </motion.div>
-        ) : offLoading && results.length === 0 ? (
+        ) : isLoading && results.length === 0 ? (
           <SkeletonSearchResults />
-        ) : results.length === 0 ? (
+        ) : results.length === 0 && !isLoading ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -182,12 +221,17 @@ function SearchContent() {
               <p className="text-[11px] text-oasis-muted">
                 {results.length} result{results.length !== 1 ? "s" : ""}
               </p>
+              {dbResults.length > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-emerald-400/70">
+                  <Database size={10} /> {dbResults.length} from Oasis DB
+                </span>
+              )}
               {uniqueOff.length > 0 && (
                 <span className="flex items-center gap-1 text-[10px] text-oasis-green/70">
                   <Globe size={10} /> {uniqueOff.length} from Open Food Facts
                 </span>
               )}
-              {offLoading && <Loader2 size={12} className="text-oasis-green animate-spin" />}
+              {isLoading && <Loader2 size={12} className="text-oasis-green animate-spin" />}
             </motion.div>
             {results.map((p, i) => (
               <ProductCard key={p.id} product={p} index={i} />

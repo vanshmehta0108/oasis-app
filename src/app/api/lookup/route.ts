@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getProductByBarcode } from "@/lib/mockData";
+import { getProductByBarcode } from "@/lib/db";
 import { fetchProductByBarcode } from "@/lib/openfoodfacts";
 import { enrichByBarcode } from "@/lib/webEnrich";
 
@@ -50,26 +50,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const { barcode } = parsed.data;
 
-    // 1. Check local mock data first
-    const localProduct = getProductByBarcode(barcode);
+    // 1. Check Supabase database first
+    const dbProduct = await getProductByBarcode(barcode);
 
-    if (localProduct) {
+    if (dbProduct) {
       return NextResponse.json(
         {
           found: true,
-          source: "local" as const,
+          source: "database" as const,
           product: {
-            id: localProduct.id,
-            barcode: localProduct.barcode,
-            name: localProduct.name,
-            brand: localProduct.brand,
-            category: localProduct.category,
-            ingredients: localProduct.ingredients,
-            safety_score: localProduct.safety_score,
-            grade: localProduct.grade,
-            image_url: localProduct.image_url,
-            analysis: localProduct.analysis,
+            id: dbProduct.barcode,
+            barcode: dbProduct.barcode,
+            name: dbProduct.name,
+            brand: dbProduct.brand,
+            category: dbProduct.category,
+            ingredients: dbProduct.ingredients,
+            safety_score: dbProduct.safety_score,
+            grade: dbProduct.score_grade,
+            image_url: dbProduct.image_url,
+            analysis: dbProduct.analysis,
           },
+          needs_analysis: !dbProduct.analysis,
         },
         { headers: corsHeaders() }
       );

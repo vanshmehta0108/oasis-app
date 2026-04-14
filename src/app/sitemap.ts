@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
-import { products } from "@/lib/mockData";
+import { getAllProductBarcodes } from "@/lib/db";
 
 const BASE_URL = "https://oasis.app";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: BASE_URL,
@@ -31,12 +31,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  const productPages: MetadataRoute.Sitemap = products.map((product) => ({
-    url: `${BASE_URL}/product/${product.id}`,
-    lastModified: new Date(),
-    changeFrequency: "weekly" as const,
-    priority: 0.7,
-  }));
+  let productPages: MetadataRoute.Sitemap = [];
+  try {
+    const barcodes = await getAllProductBarcodes();
+    productPages = barcodes.map((barcode) => ({
+      url: `${BASE_URL}/product/${barcode}`,
+      lastModified: new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
+  } catch {
+    // DB unavailable during build — skip product pages
+  }
 
   return [...staticPages, ...productPages];
 }

@@ -4,10 +4,11 @@ import type {
   Product,
   ProductInsert,
   CommunitySubmissionInsert,
-  WaterQuality,
   ProductCategory,
   ScanSource,
 } from "./database.types";
+
+// ── Single product lookups ──────────────────────────────────────────────────
 
 export async function getProductByBarcode(
   barcode: string
@@ -19,10 +20,28 @@ export async function getProductByBarcode(
     .single();
 
   if (error && error.code !== "PGRST116") {
-    throw new Error(`Failed to fetch product: ${error.message}`);
+    console.error("Failed to fetch product:", error.message);
   }
   return data as Product | null;
 }
+
+export async function getProductById(
+  id: string
+): Promise<Product | null> {
+  // Try barcode first (our route IDs are barcodes)
+  const byBarcode = await getProductByBarcode(id);
+  if (byBarcode) return byBarcode;
+
+  // Try UUID
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", id)
+    .single();
+  return (data as Product) || null;
+}
+
+// ── Search ──────────────────────────────────────────────────────────────────
 
 export async function searchProducts(
   query: string,
@@ -35,17 +54,86 @@ export async function searchProducts(
     .or(`name.ilike.%${query}%,brand.ilike.%${query}%,barcode.eq.${query}`)
     .limit(limit);
 
-  if (category) {
-    q = q.eq("category", category as ProductCategory);
+  if (category && category !== "All") {
+    const categoryMap: Record<string, string> = {
+      Food: "food",
+      Beverages: "beverage",
+      Snacks: "snack",
+      Skincare: "skincare",
+      Baby: "baby_food",
+      Household: "household",
+    };
+    const dbCat = categoryMap[category] || category.toLowerCase();
+    q = q.eq("category", dbCat as ProductCategory);
   }
 
-  const { data, error } = await q;
+  const { data, error } = await q.order("scan_count", { ascending: false });
 
   if (error) {
-    throw new Error(`Search failed: ${error.message}`);
+    console.error("Search failed:", error.message);
+    return [];
   }
   return (data as Product[]) ?? [];
 }
+
+// ── Aggregation queries (homepage) ──────────────────────────────────────────
+
+export async function getTrendingProducts(limit = 6): Promise<Product[]> {
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .order("scan_count", { ascending: false })
+    .limit(limit);
+  return (data as Product[]) ?? [];
+}
+
+export async function getWorstRated(limit = 4): Promise<Product[]> {
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .not("safety_score", "is", null)
+    .order("safety_score", { ascending: true })
+    .limit(limit);
+  return (data as Product[]) ?? [];
+}
+
+export async function getRecentProducts(limit = 4): Promise<Product[]> {
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data as Product[]) ?? [];
+}
+
+export async function getProductCount(): Promise<number> {
+  const { count } = await supabase
+    .from("products")
+    .select("*", { count: "exact", head: true });
+  return count || 0;
+}
+
+export async function getFlaggedCount(): Promise<number> {
+  const { count } = await supabase
+    .from("products")
+    .select("*", { count: "exact", head: true })
+    .lt("safety_score", 50);
+  return count || 0;
+}
+
+export async function getCategoryCounts(): Promise<Record<string, number>> {
+  const { data } = await supabase
+    .from("products")
+    .select("category");
+
+  const counts: Record<string, number> = {};
+  ((data as { category: string }[]) || []).forEach((row) => {
+    counts[row.category] = (counts[row.category] || 0) + 1;
+  });
+  return counts;
+}
+
+// ── Mutations ───────────────────────────────────────────────────────────────
 
 export async function upsertProduct(
   product: Partial<ProductInsert> & { barcode: string }
@@ -74,16 +162,17 @@ export async function recordScan(
   });
 
   if (scanError) {
-    throw new Error(`Failed to record scan: ${scanError.message}`);
+    console.error("Failed to record scan:", scanError.message);
   }
 
-  // Increment scan_count — try RPC first, fall back to manual update
+  // Increment scan_count via RPC
   const { error: rpcError } = await supabase.rpc(
     "increment_scan_count" as string,
-    { product_id: productId } as Record<string, unknown>
+    { product_barcode: productId } as Record<string, unknown>
   );
 
   if (rpcError) {
+    // Fallback: manual increment
     const { data: product } = await supabase
       .from("products")
       .select("scan_count")
@@ -98,28 +187,6 @@ export async function recordScan(
         .eq("id", productId);
     }
   }
-}
-
-export async function getTopProducts(
-  category?: string,
-  limit = 20
-): Promise<Product[]> {
-  let q = supabase
-    .from("products")
-    .select("*")
-    .order("scan_count", { ascending: false })
-    .limit(limit);
-
-  if (category) {
-    q = q.eq("category", category as ProductCategory);
-  }
-
-  const { data, error } = await q;
-
-  if (error) {
-    throw new Error(`Failed to fetch top products: ${error.message}`);
-  }
-  return (data as Product[]) ?? [];
 }
 
 export async function submitCommunityProduct(
@@ -137,24 +204,11 @@ export async function submitCommunityProduct(
   return data as { id: string };
 }
 
-export async function getWaterQuality(
-  state: string,
-  district?: string
-): Promise<WaterQuality[]> {
-  let q = supabase
-    .from("water_quality")
-    .select("*")
-    .eq("state", state)
-    .order("tested_at", { ascending: false });
+// ── Get all product barcodes (for sitemap) ──────────────────────────────────
 
-  if (district) {
-    q = q.eq("district", district);
-  }
-
-  const { data, error } = await q;
-
-  if (error) {
-    throw new Error(`Failed to fetch water quality: ${error.message}`);
-  }
-  return (data as WaterQuality[]) ?? [];
+export async function getAllProductBarcodes(): Promise<string[]> {
+  const { data } = await supabase
+    .from("products")
+    .select("barcode");
+  return ((data as { barcode: string }[]) || []).map((r) => r.barcode);
 }

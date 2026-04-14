@@ -12,7 +12,7 @@ export type ProductCategory =
 
 export type ScoreGrade = "A" | "B" | "C" | "D" | "E";
 
-export type ScanSource = "barcode" | "ocr" | "search";
+export type ScanSource = "barcode" | "ocr" | "search" | "web";
 
 export type SubscriptionTier = "free" | "pro" | "family";
 
@@ -37,6 +37,7 @@ export interface Database {
           score_grade: ScoreGrade | null;
           fssai_license: string | null;
           analysis: Record<string, unknown> | null;
+          source: string;
           created_at: string;
           updated_at: string;
           verified: boolean;
