@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/export-master.mjs",
     "build": "next build",
+    "export-master": "node scripts/export-master.mjs",
+    "analyze-all": "node scripts/analyze-all.mjs",
+    "import-products": "node -e \"fetch('http://localhost:3000/api/admin/import',{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':process.env.ADMIN_SECRET},body:JSON.stringify({page_size:50,max_pages:2})}).then(r=>r.json()).then(console.log)\"",
     "start": "next start",
     "lint": "eslint"
   },
@@ -13,6 +17,7 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.101.1",
     "@zxing/library": "^0.21.3",
+    "dotenv": "^17.4.2",
     "framer-motion": "^12.38.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.7.0",

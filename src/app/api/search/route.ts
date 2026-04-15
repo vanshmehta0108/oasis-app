@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { masterSearch } from "@/lib/master";
 import { supabase } from "@/lib/supabase";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -60,7 +61,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return errorResponse("Search failed", 500, error.message);
     }
 
-    const results = data ?? [];
+    const dbResults = data ?? [];
+
+    // Merge with master sheet results (catches products not yet in Supabase)
+    const masterResults = masterSearch(q, limit);
+    const seenBarcodes = new Set(dbResults.map((r: { barcode: string }) => r.barcode));
+
+    const extraFromMaster = masterResults
+      .filter((m) => !seenBarcodes.has(m.barcode))
+      .map((m) => ({
+        barcode: m.barcode,
+        name: m.name,
+        brand: m.brand,
+        safety_score: m.score,
+        score_grade: m.grade,
+        scan_count: 0,
+      }));
+
+    const results = [...dbResults, ...extraFromMaster].slice(0, limit);
 
     return NextResponse.json(
       { results, count: results.length, query: q },

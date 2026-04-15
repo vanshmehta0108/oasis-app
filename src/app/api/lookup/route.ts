@@ -1,7 +1,6 @@
-export const runtime = "edge";
-
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { masterLookup } from "@/lib/master";
 import { getProductByBarcode } from "@/lib/db";
 import { fetchProductByBarcode } from "@/lib/openfoodfacts";
 import { enrichByBarcode } from "@/lib/webEnrich";
@@ -50,7 +49,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const { barcode } = parsed.data;
 
-    // 1. Check Supabase database first
+    // 0. Check static master sheet first (bundled at build, zero cost)
+    const masterProduct = masterLookup(barcode);
+    if (masterProduct && masterProduct.safety_score !== null) {
+      return NextResponse.json(
+        {
+          found: true,
+          source: "master" as const,
+          product: {
+            id: barcode,
+            barcode,
+            name: masterProduct.name,
+            brand: masterProduct.brand,
+            category: masterProduct.category,
+            ingredients: masterProduct.ingredients,
+            safety_score: masterProduct.safety_score,
+            grade: masterProduct.score_grade,
+            image_url: masterProduct.image_url,
+            analysis: masterProduct.analysis,
+          },
+          needs_analysis: false,
+        },
+        { headers: corsHeaders() }
+      );
+    }
+
+    // 1. Check Supabase database
     const dbProduct = await getProductByBarcode(barcode);
 
     if (dbProduct) {

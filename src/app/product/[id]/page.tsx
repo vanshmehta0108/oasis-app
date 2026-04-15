@@ -9,6 +9,7 @@ import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
 import { ScoreRing } from "@/components/ScoreRing";
 import { IngredientList } from "@/components/IngredientList";
 import type { IngredientAnalysis } from "@/lib/mockData";
+import { masterLookup } from "@/lib/master";
 import { getProductByBarcode as getDbProduct } from "@/lib/db";
 import { recordScan } from "@/lib/scanHistory";
 
@@ -162,7 +163,31 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
   // Main data loader
   useEffect(() => {
-    // 1. Try Supabase DB first
+    // 0. Try static master sheet first (zero cost, instant)
+    const masterProduct = masterLookup(id);
+    if (masterProduct && masterProduct.safety_score !== null) {
+      const analysis = masterProduct.analysis as unknown as Record<string, unknown> | null;
+      setProduct({
+        id,
+        name: masterProduct.name,
+        brand: masterProduct.brand,
+        category: masterProduct.category,
+        ingredients: masterProduct.ingredients,
+        safety_score: masterProduct.safety_score,
+        grade: masterProduct.score_grade,
+        image_url: masterProduct.image_url || undefined,
+        analysis: analysis ? mapAnalysisJson(analysis) : undefined,
+      });
+      recordScan({
+        id,
+        name: masterProduct.name,
+        brand: masterProduct.brand,
+        category: masterProduct.category,
+      });
+      return; // Done — no DB or API calls needed
+    }
+
+    // 1. Try Supabase DB
     getDbProduct(id)
       .then((dbProduct) => {
         if (!dbProduct) return null;

@@ -2,6 +2,7 @@ export const runtime = "edge";
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { masterLookup } from "@/lib/master";
 import { supabase } from "@/lib/supabase";
 import { analyzeIngredients, analyzeLabel } from "@/lib/scoring";
 import type { Product, ProductInsert, ProductCategory } from "@/lib/database.types";
@@ -59,8 +60,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return errorResponse("Provide at least one of: barcode, ingredients, or image", 400);
     }
 
-    // Check cache if barcode provided
+    // Check cache if barcode provided — master sheet first (zero cost), then DB
     if (barcode) {
+      const masterProduct = masterLookup(barcode);
+      if (masterProduct?.analysis) {
+        return NextResponse.json(
+          { source: "master", product: { barcode, ...masterProduct }, analysis: masterProduct.analysis },
+          { headers: corsHeaders() }
+        );
+      }
+
       const { data: existing } = await supabase
         .from("products")
         .select("*")
