@@ -6,6 +6,7 @@ import { ToastProvider } from "@/lib/useToast";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -94,6 +95,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <ToastContainer />
           <main id="main-content" className="pb-20">{children}</main>
           <BottomNav />
+          <SpeedInsights />
         </ToastProvider>
       </body>
     </html>
