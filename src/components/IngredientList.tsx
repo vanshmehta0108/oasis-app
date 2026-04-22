@@ -102,7 +102,7 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="overflow-hidden"
                 >
-                  <div className={`mt-2 pt-2 border-t border-white/5 rounded-lg ${cfg.expandBg} p-2 -mx-1`}>
+                  <div className={`mt-2 pt-2 border-t border-black/[0.06] rounded-lg ${cfg.expandBg} p-2 -mx-1`}>
                     <p className="text-xs text-oasis-text-secondary leading-relaxed">
                       {ing.explanation}
                     </p>

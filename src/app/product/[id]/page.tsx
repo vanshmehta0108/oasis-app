@@ -35,18 +35,18 @@ interface ProductData {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getSummaryLevel(score: number) {
-  if (score >= 75) return { label: "Safe", color: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-l-emerald-400" };
-  if (score >= 55) return { label: "Moderate", color: "text-lime-400", bg: "bg-lime-400/10", border: "border-l-lime-400" };
-  if (score >= 35) return { label: "Concerning", color: "text-amber-400", bg: "bg-amber-400/10", border: "border-l-amber-400" };
-  return { label: "Unsafe", color: "text-red-400", bg: "bg-red-400/10", border: "border-l-red-400" };
+  if (score >= 75) return { label: "Safe", color: "text-[#1E8040]", bg: "bg-[#F0FBF4]", border: "border-l-[#1E8040]" };
+  if (score >= 55) return { label: "Moderate", color: "text-[#B87800]", bg: "bg-[#FFF8E6]", border: "border-l-[#B87800]" };
+  if (score >= 35) return { label: "Concerning", color: "text-[#CC5200]", bg: "bg-[#FFF2E8]", border: "border-l-[#CC5200]" };
+  return { label: "Unsafe", color: "text-[#CC1010]", bg: "bg-[#FFF0EE]", border: "border-l-[#CC1010]" };
 }
 
 function getScoreColor(score: number) {
-  if (score >= 80) return "#4ade80";
-  if (score >= 60) return "#a3e635";
-  if (score >= 40) return "#fbbf24";
-  if (score >= 20) return "#fb923c";
-  return "#f87171";
+  if (score >= 80) return "#34C759";
+  if (score >= 60) return "#FF9F0A";
+  if (score >= 40) return "#FF6B00";
+  if (score >= 20) return "#FF3B30";
+  return "#FF3B30";
 }
 
 function mapAnalysisJson(analysis: Record<string, unknown>): ProductData["analysis"] {
@@ -116,7 +116,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // Dynamic OG meta tags
   useEffect(() => {
     if (!product) return;
-    document.title = `${product.name} — ${score}/100 | Oasis`;
+    document.title = `${product.name} — ${score}/100 | Sift`;
 
     const setMeta = (prop: string, content: string) => {
       let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement;
@@ -130,7 +130,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
     const shareUrl = `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}&score=${score}&grade=${grade}`;
     setMeta("og:title", `${product.name} — Safety Score: ${score}/100`);
-    setMeta("og:description", product.analysis?.summary || `Scanned on Oasis. Grade ${grade}.`);
+    setMeta("og:description", product.analysis?.summary || `Scanned on Sift. Grade ${grade}.`);
     setMeta("og:image", shareUrl);
     setMeta("og:type", "article");
   }, [product, score, grade]);
@@ -292,10 +292,11 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
   if (notFoundState) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-dvh gradient-mesh px-6">
-        <h1 className="text-xl font-bold text-oasis-text mb-2">Product Not Found</h1>
-        <p className="text-sm text-oasis-muted text-center mb-4">This product isn&apos;t in our database yet.</p>
-        <Link href="/scan" className="px-5 py-2.5 rounded-full bg-oasis-green text-oasis-black font-bold text-sm">
+      <div className="flex flex-col items-center justify-center min-h-dvh px-6" style={{ background: "#F2F2F7" }}>
+        <span className="text-5xl mb-4">😔</span>
+        <h1 className="text-[18px] font-bold text-black mb-2">Product Not Found</h1>
+        <p className="text-sm text-center mb-5" style={{ color: "#8E8E93" }}>This product isn&apos;t in our database yet.</p>
+        <Link href="/scan" className="px-5 py-2.5 rounded-full text-white font-semibold text-sm" style={{ background: "#007AFF" }}>
           Scan Another
         </Link>
       </div>
@@ -304,7 +305,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
   if (!product) {
     return (
-      <div className="min-h-dvh gradient-mesh">
+      <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
         <div className="max-w-lg mx-auto">
           <SkeletonScoreHero />
           <div className="px-5 space-y-3">
@@ -334,7 +335,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             whileTap={{ scale: 0.9 }}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 px-3 py-2 rounded-full glass-dark border border-white/10 focus-visible:ring-2 focus-visible:ring-oasis-green"
+            className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08] focus-visible:ring-2 focus-visible:ring-oasis-green"
           >
             <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
             <span className="text-xs font-medium text-oasis-text">Back</span>
@@ -374,7 +375,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <ScoreRing score={score} grade={grade} size="lg" />
             </motion.div>
           ) : (
-            <div className="w-[168px] h-[168px] rounded-full bg-oasis-card border-2 border-oasis-border flex items-center justify-center">
+            <div className="w-[168px] h-[168px] rounded-full bg-white border-2 border-sift-sep-opaque flex items-center justify-center" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
               {analyzing ? (
                 <Loader2 size={40} className="text-oasis-green animate-spin" />
               ) : (
@@ -405,7 +406,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => {
-                const text = `I scanned ${product.name} on Oasis — it scored ${score}/100 (Grade ${grade}). ${level.label}! 🌿\n\nScan your products: ${window.location.origin}`;
+                const text = `I scanned ${product.name} on Sift — it scored ${score}/100 (Grade ${grade}). ${level.label}! 🌿\n\nScan your products: ${window.location.origin}`;
                 window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
               }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/10 border border-[#25D366]/20 hover:bg-[#25D366]/20 transition-colors"
@@ -420,7 +421,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 if (navigator.share) {
                   navigator.share({
                     title: `${product.name} — Safety Score: ${score}/100`,
-                    text: `I scanned ${product.name} on Oasis. It scored ${score}/100 (Grade ${grade}). ${product.analysis?.summary || ""}`,
+                    text: `I scanned ${product.name} on Sift. It scored ${score}/100 (Grade ${grade}). ${product.analysis?.summary || ""}`,
                     url: window.location.href,
                   }).catch(() => {});
                 } else {
@@ -429,7 +430,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   }).catch(() => {});
                 }
               }}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white border border-black/[0.08] active:bg-[#F2F2F7] transition-colors"
             >
               <Share2 size={15} className="text-oasis-green" />
               <span className="text-sm font-medium text-oasis-text">Share</span>
@@ -440,7 +441,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Summary card */}
         {product.analysis && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <div className={`flex items-start gap-3 p-4 rounded-2xl ${level.bg} border border-white/5 border-l-[3px] ${level.border}`}>
+            <div className={`flex items-start gap-3 p-4 rounded-2xl ${level.bg} border border-black/[0.06] border-l-[3px] ${level.border}`}>
               <ShieldAlert size={20} className={`${level.color} shrink-0 mt-0.5`} />
               <div>
                 <span className={`text-sm font-bold ${level.color}`}>Overall: {level.label}</span>
@@ -455,7 +456,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Raw Ingredients (when no analysis yet) */}
         {!product.analysis && product.ingredients.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">Ingredients</h2>
+            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredients</h2>
             <div className="p-4 rounded-2xl bg-oasis-card border border-oasis-border">
               <p className="text-xs text-oasis-text-secondary leading-relaxed">
                 {product.ingredients.join(", ")}
@@ -472,7 +473,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Ingredient Analysis */}
         {product.analysis && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">Ingredient Analysis</h2>
+            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredient Analysis</h2>
             <IngredientList ingredients={product.analysis.ingredients} />
           </motion.div>
         )}
@@ -480,7 +481,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Warnings */}
         {product.analysis && product.analysis.warnings.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-3">Warnings</h2>
+            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Warnings</h2>
             <div className="space-y-2">
               {product.analysis.warnings.map((w, i) => (
                 <motion.div
@@ -488,12 +489,12 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.5 + i * 0.08 }}
-                  className="flex items-start gap-2.5 p-3 rounded-xl bg-red-400/5 border border-red-400/10 warning-pulse"
+                  className="flex items-start gap-2.5 p-3 rounded-xl bg-[#FFF0EE] border border-[#FF3B30]/15 warning-pulse"
                 >
-                  <div className="w-5 h-5 rounded-full bg-red-400/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <AlertTriangle size={11} className="text-red-400" />
+                  <div className="w-5 h-5 rounded-full bg-[#FF3B30]/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <AlertTriangle size={11} className="text-[#CC1010]" />
                   </div>
-                  <p className="text-xs text-red-300/90 leading-relaxed">{w}</p>
+                  <p className="text-xs text-[#CC1010] leading-relaxed">{w}</p>
                 </motion.div>
               ))}
             </div>
@@ -503,17 +504,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Healthier Alternative */}
         {product.analysis?.healthier_alternative && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <div className="flex items-start gap-3 p-4 rounded-2xl bg-emerald-400/5 border border-emerald-400/10 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/[0.03] to-transparent pointer-events-none" />
-              <Leaf size={20} className="text-emerald-400 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#F0FBF4] border border-[#1E8040]/15 relative overflow-hidden">
+              <Leaf size={20} className="text-[#1E8040] shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="text-sm font-bold text-emerald-400">Healthier Alternative</span>
+                <span className="text-sm font-bold text-[#1E8040]">Healthier Alternative</span>
                 <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
                   {product.analysis.healthier_alternative}
                 </p>
                 <motion.button
                   whileTap={{ scale: 0.95 }}
-                  className="flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-xs font-semibold"
+                  className="flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg bg-[#1E8040]/10 border border-[#1E8040]/20 text-[#1E8040] text-xs font-semibold"
                 >
                   <ExternalLink size={12} />
                   Shop Now

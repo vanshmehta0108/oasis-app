@@ -1,80 +1,85 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ScoreRing } from "./ScoreRing";
 import type { Product } from "@/lib/mockData";
+import {
+  UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby,
+  Home as HomeIcon, Package
+} from "lucide-react";
 
-const categoryIcons: Record<string, string> = {
-  Food: "🍛",
-  Beverages: "🥤",
-  Snacks: "🍿",
-  Skincare: "✨",
-  Baby: "👶",
-  Household: "🏠",
+const categoryConfig: Record<string, { bg: string; color: string; Icon: React.ElementType }> = {
+  Food:      { bg: "#FFF3E8", color: "#FF6B00", Icon: UtensilsCrossed },
+  Beverages: { bg: "#EBF3FF", color: "#007AFF", Icon: Coffee },
+  Snacks:    { bg: "#FFF8E6", color: "#B87800", Icon: Popcorn },
+  Skincare:  { bg: "#F5EEFF", color: "#8B5CF6", Icon: Sparkles },
+  Baby:      { bg: "#FFF0F5", color: "#FF2D78", Icon: Baby },
+  Household: { bg: "#F0FBF4", color: "#1E8040", Icon: HomeIcon },
+  food:      { bg: "#FFF3E8", color: "#FF6B00", Icon: UtensilsCrossed },
+  beverage:  { bg: "#EBF3FF", color: "#007AFF", Icon: Coffee },
+  snack:     { bg: "#FFF8E6", color: "#B87800", Icon: Popcorn },
+  skincare:  { bg: "#F5EEFF", color: "#8B5CF6", Icon: Sparkles },
+  baby_food: { bg: "#FFF0F5", color: "#FF2D78", Icon: Baby },
+  household: { bg: "#F0FBF4", color: "#1E8040", Icon: HomeIcon },
 };
 
 export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
   const isOFF = product.id.startsWith("off-");
-  const [imageError, setImageError] = useState(false);
+  const cfg = categoryConfig[product.category];
 
   const handleClick = () => {
-    // Store OFF product data in sessionStorage so product page can access it
     if (isOFF) {
       const barcode = product.barcode || product.id.replace("off-", "");
-      sessionStorage.setItem(
-        `off-product-${barcode}`,
-        JSON.stringify({ ...product, needs_analysis: true })
-      );
+      sessionStorage.setItem(`off-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: true }));
     }
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.05 }}
+      transition={{ duration: 0.3, delay: index * 0.04 }}
     >
       <Link href={`/product/${product.id}`} onClick={handleClick}>
         <motion.div
-          whileTap={{ scale: 0.97 }}
-          className="flex items-center gap-3 p-3 rounded-2xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors"
+          whileTap={{ scale: 0.98 }}
+          className="flex items-center gap-3 px-4 py-3 bg-white ios-section-row"
         >
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-oasis-card-hover shrink-0 overflow-hidden">
-            {product.image_url && !imageError ? (
-              <img
-                src={product.image_url}
-                alt=""
-                className="w-full h-full object-cover"
-                onError={() => setImageError(true)}
-              />
+          {/* Thumbnail */}
+          <div
+            className="flex items-center justify-center w-10 h-10 rounded-[10px] shrink-0 overflow-hidden"
+            style={{ background: cfg?.bg || "#F2F2F7" }}
+          >
+            {cfg ? (
+              <cfg.Icon size={18} color={cfg.color} />
             ) : (
-              <span className="text-lg">{categoryIcons[product.category] || "📦"}</span>
+              <Package size={18} color="#8E8E93" />
             )}
           </div>
+
+          {/* Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-oasis-text truncate">
+            <p className="text-[14px] font-semibold text-black truncate leading-tight">
               {product.name}
-            </h3>
-            <p className="text-xs text-oasis-muted mt-0.5">{product.brand}</p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-oasis-green/10 text-oasis-green font-medium">
-                {product.category}
-              </span>
-              {isOFF && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-400/10 text-blue-400 border border-blue-400/20">
-                  OFF
-                </span>
-              )}
-            </div>
+            </p>
+            <p className="text-[12px] mt-0.5" style={{ color: "#8E8E93" }}>
+              {product.brand}
+            </p>
           </div>
+
+          {/* Score */}
           {!isOFF ? (
             <ScoreRing score={product.safety_score} grade={product.grade} size="sm" animate={false} />
           ) : (
-            <div className="w-14 h-14 rounded-full border border-oasis-border flex items-center justify-center">
-              <span className="text-[10px] text-oasis-muted font-medium">Tap to<br/>analyze</span>
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: "#F2F2F7" }}
+            >
+              <span className="text-[9px] font-medium text-center leading-tight" style={{ color: "#8E8E93" }}>
+                Tap to<br />analyze
+              </span>
             </div>
           )}
         </motion.div>
@@ -84,35 +89,29 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
 }
 
 export function ProductCardHorizontal({ product }: { product: Product }) {
-  const [imageError, setImageError] = useState(false);
+  const cfg = categoryConfig[product.category];
 
   return (
     <Link href={`/product/${product.id}`}>
       <motion.div
         whileTap={{ scale: 0.97 }}
-        className="w-36 shrink-0 p-3 rounded-2xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors"
+        className="w-[140px] shrink-0 rounded-2xl bg-white overflow-hidden"
+        style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}
       >
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-oasis-card-hover overflow-hidden">
-            {product.image_url && !imageError ? (
-              <img
-                src={product.image_url}
-                alt=""
-                className="w-full h-full object-cover"
-                onError={() => setImageError(true)}
-              />
-            ) : (
-              <span className="text-2xl">{categoryIcons[product.category] || "📦"}</span>
-            )}
-          </div>
-          <ScoreRing score={product.safety_score} grade={product.grade} size="sm" animate={false} />
+        <div className="h-[48px] flex items-center justify-center" style={{ background: cfg?.bg || "#F2F2F7" }}>
+          {cfg ? (
+            <cfg.Icon size={20} color={cfg.color} />
+          ) : (
+            <Package size={20} color="#8E8E93" />
+          )}
         </div>
-        <h3 className="text-xs font-semibold text-oasis-text truncate">
-          {product.name}
-        </h3>
-        <p className="text-[10px] text-oasis-muted mt-0.5">
-          {product.brand}
-        </p>
+        <div className="p-3">
+          <div className="flex justify-between items-start mb-1">
+            <p className="text-[12px] font-semibold text-black truncate leading-snug flex-1 pr-1">{product.name}</p>
+            <ScoreRing score={product.safety_score} grade={product.grade} size="sm" animate={false} />
+          </div>
+          <p className="text-[10px]" style={{ color: "#8E8E93" }}>{product.brand}</p>
+        </div>
       </motion.div>
     </Link>
   );

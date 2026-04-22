@@ -134,11 +134,11 @@ function SearchContent() {
   const showEmpty = !query && category === "All";
 
   return (
-    <div className="px-4 pt-12 pb-24 max-w-lg mx-auto">
+    <div className="px-4 pt-14 pb-24 max-w-lg mx-auto">
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="font-[family-name:var(--font-instrument)] text-2xl text-oasis-text mb-4"
+        className="text-[28px] font-bold text-black tracking-tight mb-4"
       >
         Search
       </motion.h1>
@@ -159,18 +159,19 @@ function SearchContent() {
           >
             <motion.div
               variants={fadeUp}
-              className="w-20 h-20 rounded-full bg-oasis-card border border-oasis-border flex items-center justify-center mb-4"
+              className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
+              style={{ background: "#F2F2F7" }}
             >
               <span className="text-4xl">🔍</span>
             </motion.div>
-            <motion.p variants={fadeUp} className="text-sm text-oasis-muted max-w-xs mb-6">
+            <motion.p variants={fadeUp} className="text-[14px] max-w-xs mb-6" style={{ color: "#8E8E93" }}>
               Search for any product or brand to see its safety analysis
             </motion.p>
 
             <motion.div variants={fadeUp} className="w-full">
               <div className="flex items-center gap-2 mb-3 justify-center">
-                <TrendingUp size={14} className="text-oasis-green" />
-                <span className="text-xs font-semibold text-oasis-muted">Popular Searches</span>
+                <TrendingUp size={14} style={{ color: "#007AFF" }} />
+                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#8E8E93" }}>Popular Searches</span>
               </div>
               <div className="flex flex-wrap gap-2 justify-center">
                 {popularSearches.map((term) => (
@@ -178,7 +179,8 @@ function SearchContent() {
                     key={term}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setQuery(term)}
-                    className="px-3.5 py-1.5 rounded-full bg-oasis-card border border-oasis-border text-xs font-medium text-oasis-text hover:border-oasis-green/30 transition-colors"
+                    className="px-3.5 py-1.5 rounded-full text-[13px] font-medium text-black"
+                    style={{ background: "#FFFFFF", border: "1px solid #E5E5EA" }}
                   >
                     {term}
                   </motion.button>
@@ -223,7 +225,7 @@ function SearchContent() {
               </p>
               {dbResults.length > 0 && (
                 <span className="flex items-center gap-1 text-[10px] text-emerald-400/70">
-                  <Database size={10} /> {dbResults.length} from Oasis DB
+                  <Database size={10} /> {dbResults.length} from Sift DB
                 </span>
               )}
               {uniqueOff.length > 0 && (

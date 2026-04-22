@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       >
         {/* Top bar */}
         <div style={{ display: "flex", alignItems: "center", gap: "12", marginBottom: "40" }}>
-          <div style={{ fontSize: "24", color: "#4ade80", fontWeight: "700" }}>🌿 Oasis</div>
+          <div style={{ fontSize: "24", color: "#4ade80", fontWeight: "700" }}>Sift</div>
           <div style={{ fontSize: "16", color: "#6b7c72", marginLeft: "12" }}>India&apos;s AI Safety Scanner</div>
         </div>
 
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
         {/* Footer */}
         <div style={{ position: "absolute", bottom: "30", fontSize: "14", color: "#6b7c72" }}>
-          Scan any product → oasis-app.vercel.app
+          Scan any product → sift.app
         </div>
       </div>
     ),

@@ -77,7 +77,7 @@ export default function ProfilePage() {
   const safeProducts = scanHistory.filter((p) => (p.score ?? 0) >= 70).length;
 
   return (
-    <div className="gradient-mesh min-h-dvh">
+    <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
       <motion.div
         className="px-4 pt-12 pb-24 max-w-lg mx-auto"
         initial="hidden"
@@ -85,47 +85,36 @@ export default function ProfilePage() {
         variants={stagger}
       >
         {/* Avatar area with gradient bg */}
-        <motion.div variants={fadeUp} className="relative mb-6">
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-oasis-green/10 via-transparent to-transparent" />
-          <div className="relative flex flex-col items-center py-6">
-            <div className="w-20 h-20 rounded-full bg-oasis-card border-2 border-oasis-green/20 flex items-center justify-center mb-3 shadow-[0_0_30px_rgba(74,222,128,0.1)]">
-              <User size={32} className="text-oasis-green/60" />
-            </div>
-            <h1 className="font-[family-name:var(--font-instrument)] text-2xl text-oasis-text">
-              Your Profile
-            </h1>
-            <span className="text-xs text-oasis-muted mt-1">Personalize your safety alerts</span>
+        <motion.div variants={fadeUp} className="flex flex-col items-center pt-2 pb-6 mb-2">
+          <div className="w-20 h-20 rounded-full bg-white border border-black/[0.08] flex items-center justify-center mb-3" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <User size={32} style={{ color: "#007AFF" }} />
           </div>
+          <h1 className="font-bold tracking-tight text-[22px] text-black">Your Profile</h1>
+          <span className="text-xs mt-1" style={{ color: "#8E8E93" }}>Personalize your safety alerts</span>
         </motion.div>
 
         {/* Stats row */}
         <motion.div variants={fadeUp} className="mb-6">
           <div className="grid grid-cols-3 gap-2">
-            <div className="flex flex-col items-center p-3 rounded-2xl bg-oasis-card border border-oasis-border">
-              <ScanLine size={16} className="text-oasis-green mb-1" />
-              <span className="text-lg font-bold text-oasis-text">{scanCount}</span>
-              <span className="text-[10px] text-oasis-muted">Total Scans</span>
-            </div>
-            <div className="flex flex-col items-center p-3 rounded-2xl bg-oasis-card border border-oasis-border">
-              <ShieldCheck size={16} className="text-oasis-green mb-1" />
-              <span className="text-lg font-bold text-oasis-text">{scanHistory.length}</span>
-              <span className="text-[10px] text-oasis-muted">Checked</span>
-            </div>
-            <div className="flex flex-col items-center p-3 rounded-2xl bg-oasis-card border border-oasis-border">
-              <CheckCircle size={16} className="text-emerald-400 mb-1" />
-              <span className="text-lg font-bold text-emerald-400">{safeProducts}</span>
-              <span className="text-[10px] text-oasis-muted">Safe Picks</span>
-            </div>
+            {[
+              { icon: <ScanLine size={16} style={{ color: "#007AFF" }} />, value: scanCount, label: "Total Scans", color: "#007AFF" },
+              { icon: <ShieldCheck size={16} style={{ color: "#007AFF" }} />, value: scanHistory.length, label: "Checked", color: "#007AFF" },
+              { icon: <CheckCircle size={16} style={{ color: "#34C759" }} />, value: safeProducts, label: "Safe Picks", color: "#34C759" },
+            ].map(({ icon, value, label, color }) => (
+              <div key={label} className="flex flex-col items-center p-3 rounded-2xl bg-white" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+                {icon}
+                <span className="text-lg font-bold mt-1" style={{ color }}>{value}</span>
+                <span className="text-[10px] mt-0.5" style={{ color: "#8E8E93" }}>{label}</span>
+              </div>
+            ))}
           </div>
         </motion.div>
 
         {/* Health Profile */}
         <motion.div variants={fadeUp} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
-            <Heart size={15} className="text-oasis-green" />
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-              Health Conditions
-            </h2>
+            <Heart size={15} style={{ color: "#007AFF" }} />
+            <h2 className="font-semibold text-[17px] text-black">Health Conditions</h2>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {healthConditions.map((c) => {
@@ -137,11 +126,11 @@ export default function ProfilePage() {
                   onClick={() => toggleCondition(c.name)}
                   aria-pressed={active}
                   aria-label={`${c.name}${active ? " (selected)" : ""}`}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-left transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oasis-green ${
-                    active
-                      ? "bg-oasis-green/10 border-oasis-green/30 text-oasis-green shadow-[0_0_15px_rgba(74,222,128,0.1)]"
-                      : "bg-oasis-card border-oasis-border text-oasis-muted hover:text-oasis-text"
-                  }`}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-left transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue"
+                  style={active
+                    ? { background: "rgba(0,122,255,0.08)", borderColor: "rgba(0,122,255,0.25)", color: "#007AFF" }
+                    : { background: "#FFFFFF", borderColor: "#E5E5EA", color: "#8E8E93" }
+                  }
                 >
                   <span className="text-base">{c.icon}</span>
                   {c.name}
@@ -153,7 +142,7 @@ export default function ProfilePage() {
 
         {/* Allergies */}
         <motion.div variants={fadeUp} className="mb-5">
-          <h3 className="text-sm font-semibold text-oasis-text mb-2">Allergies</h3>
+          <h3 className="text-sm font-semibold text-black mb-2">Allergies</h3>
           <div className="flex flex-wrap gap-2 mb-2">
             {allergies.map((a) => (
               <motion.span
@@ -183,15 +172,16 @@ export default function ProfilePage() {
               onKeyDown={(e) => e.key === "Enter" && addAllergy()}
               placeholder="Add allergy..."
               aria-label="Type an allergy to add"
-              className="flex-1 px-3 py-2 rounded-xl bg-oasis-card border border-oasis-border text-xs text-oasis-text placeholder:text-oasis-muted focus:outline-none focus:border-oasis-green/40 focus:ring-1 focus:ring-oasis-green/20 transition-all"
+              className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#E5E5EA] text-xs text-black placeholder:text-[#8E8E93] focus:outline-none focus:border-[rgba(0,122,255,0.4)] focus:ring-1 focus:ring-[rgba(0,122,255,0.2)] transition-all"
             />
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={addAllergy}
               aria-label="Add allergy"
-              className="w-9 h-9 rounded-xl bg-oasis-green/10 border border-oasis-green/20 flex items-center justify-center hover:bg-oasis-green/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oasis-green"
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue"
+              style={{ background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)" }}
             >
-              <Plus size={16} className="text-oasis-green" />
+              <Plus size={16} style={{ color: "#007AFF" }} />
             </motion.button>
           </div>
         </motion.div>
@@ -199,20 +189,20 @@ export default function ProfilePage() {
         {/* Language */}
         <motion.div variants={fadeUp} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
-            <Globe size={15} className="text-oasis-green" />
-            <h3 className="text-sm font-semibold text-oasis-text">Language</h3>
+            <Globe size={15} style={{ color: "#007AFF" }} />
+            <h3 className="text-sm font-semibold text-black">Language</h3>
           </div>
-          <div className="flex gap-0 p-1 rounded-xl bg-oasis-card border border-oasis-border">
+          <div className="flex gap-0 p-1 rounded-xl bg-white border border-[#E5E5EA]">
             {["English", "Hindi"].map((lang) => (
               <motion.button
                 key={lang}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setLanguage(lang)}
-                className={`flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all ${
-                  language === lang
-                    ? "bg-oasis-green text-oasis-black"
-                    : "text-oasis-muted hover:text-oasis-text"
-                }`}
+                className="flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all"
+                style={language === lang
+                  ? { background: "#007AFF", color: "#FFFFFF" }
+                  : { color: "#8E8E93" }
+                }
               >
                 {lang === "English" ? "🇬🇧 English" : "🇮🇳 हिंदी"}
               </motion.button>
@@ -223,28 +213,24 @@ export default function ProfilePage() {
         {/* Scan History as timeline */}
         <motion.div variants={fadeUp} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
-            <History size={15} className="text-oasis-green" />
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-              Scan History
-            </h2>
+            <History size={15} style={{ color: "#007AFF" }} />
+            <h2 className="font-semibold text-[17px] text-black">Scan History</h2>
           </div>
-          <div className="relative">
-            {/* Timeline line */}
-            <div className="absolute left-[27px] top-3 bottom-3 w-px bg-oasis-border" />
-            <div className="space-y-2">
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+            <div className="space-y-0">
               {recentScans.map((p, i) => (
                 <Link key={p.id} href={`/product/${p.id}`}>
                   <motion.div
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={{ scale: 0.98 }}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors relative"
+                    className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? "border-t border-black/[0.06]" : ""}`}
                   >
-                    <div className="w-3 h-3 rounded-full bg-oasis-green/20 border-2 border-oasis-green shrink-0 z-10" />
+                    <div className="w-3 h-3 rounded-full bg-[rgba(0,122,255,0.2)] border-2 border-[#007AFF] shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-oasis-text truncate">{p.name}</p>
-                      <p className="text-[11px] text-oasis-muted">{p.brand}</p>
+                      <p className="text-[14px] font-semibold text-black truncate">{p.name}</p>
+                      <p className="text-[11px]" style={{ color: "#8E8E93" }}>{p.brand}</p>
                     </div>
                     <ScoreRing score={p.score ?? 0} grade={p.grade ?? "?"} size="sm" animate={false} />
                   </motion.div>
@@ -256,27 +242,27 @@ export default function ProfilePage() {
 
         {/* Upgrade to Pro — premium card */}
         <motion.div variants={fadeUp}>
-          <div className="relative overflow-hidden p-5 rounded-2xl border border-oasis-green/20 shine-sweep">
-            <div className="absolute inset-0 bg-gradient-to-br from-oasis-green/10 via-emerald-900/20 to-oasis-card" />
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent" />
+          <div className="relative overflow-hidden p-5 rounded-2xl shine-sweep" style={{ background: "#007AFF" }}>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0A84FF] to-[#0056CC]" />
             <div className="relative">
               <div className="absolute top-0 right-0">
-                <Crown size={20} className="text-oasis-green/40" />
+                <Crown size={20} style={{ color: "rgba(255,255,255,0.5)" }} />
               </div>
-              <span className="inline-block px-2.5 py-0.5 rounded-full bg-oasis-green/20 text-oasis-green text-[10px] font-bold uppercase tracking-wider mb-2">
+              <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2" style={{ background: "rgba(255,255,255,0.2)", color: "#FFFFFF" }}>
                 Pro
               </span>
-              <h3 className="text-base font-bold text-oasis-text mb-1">Upgrade to Oasis Pro</h3>
-              <p className="text-xs text-oasis-muted leading-relaxed mb-3">
+              <h3 className="text-base font-bold text-white mb-1">Upgrade to Sift Pro</h3>
+              <p className="text-xs leading-relaxed mb-3" style={{ color: "rgba(255,255,255,0.75)" }}>
                 Unlimited scans, photo analysis, personalized alerts, and family sharing.
               </p>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className="text-2xl font-bold text-oasis-green">&#8377;99</span>
-                <span className="text-xs text-oasis-muted">/month</span>
+                <span className="text-2xl font-bold text-white">&#8377;99</span>
+                <span className="text-xs" style={{ color: "rgba(255,255,255,0.65)" }}>/month</span>
               </div>
               <motion.button
                 whileTap={{ scale: 0.95 }}
-                className="w-full py-2.5 rounded-xl bg-oasis-green text-oasis-black text-sm font-bold shadow-[0_4px_20px_rgba(74,222,128,0.3)]"
+                className="w-full py-2.5 rounded-xl text-sm font-bold"
+                style={{ background: "#FFFFFF", color: "#007AFF" }}
               >
                 Start Free Trial
               </motion.button>

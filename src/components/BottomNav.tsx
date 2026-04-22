@@ -7,10 +7,10 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 
 const tabs = [
-  { href: "/", icon: Home, label: "Home" },
-  { href: "/search", icon: Search, label: "Search" },
-  { href: "/scan", icon: Camera, label: "Scan", featured: true },
-  { href: "/profile", icon: User, label: "Profile" },
+  { href: "/",        icon: Home,   label: "Home"    },
+  { href: "/search",  icon: Search, label: "Search"  },
+  { href: "/scan",    icon: Camera, label: "Scan",   featured: true },
+  { href: "/profile", icon: User,   label: "Profile" },
 ];
 
 export function BottomNav() {
@@ -19,24 +19,30 @@ export function BottomNav() {
 
   useEffect(() => {
     const onboarded = localStorage.getItem("oasis-onboarded");
-    const onScan = pathname === "/scan";
-    setVisible(!!onboarded && !onScan);
+    setVisible(!!onboarded && pathname !== "/scan");
   }, [pathname]);
 
   if (!visible) return null;
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 glass-dark border-t border-white/[0.06]"
-      aria-label="Main navigation"
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center"
+      style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
-      <div
-        className="flex items-end justify-around px-2 mx-auto max-w-lg safe-bottom"
+      <nav
+        className="flex items-center gap-1 px-2 py-2 rounded-[28px]"
+        style={{
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(24px) saturate(180%)",
+          WebkitBackdropFilter: "blur(24px) saturate(180%)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)",
+          border: "0.5px solid rgba(0,0,0,0.08)",
+        }}
+        aria-label="Main navigation"
         role="tablist"
       >
         {tabs.map((tab) => {
-          const active =
-            tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+          const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           const Icon = tab.icon;
 
           if (tab.featured) {
@@ -44,26 +50,22 @@ export function BottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className="relative -mt-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oasis-green rounded-full"
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue rounded-full mx-1"
                 role="tab"
                 aria-selected={active}
-                aria-label={`${tab.label}${active ? " (current page)" : ""}`}
+                aria-label="Scan a product"
               >
                 <motion.div
-                  whileTap={{ scale: 0.85 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                  className="relative flex items-center justify-center w-[56px] h-[56px] rounded-full bg-oasis-green shadow-[0_4px_20px_rgba(74,222,128,0.4),0_0_40px_rgba(74,222,128,0.15)]"
+                  whileTap={{ scale: 0.88 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                  className="flex items-center justify-center w-[52px] h-[52px] rounded-full"
+                  style={{
+                    background: "#007AFF",
+                    boxShadow: "0 4px 16px rgba(0,122,255,0.36)",
+                  }}
                 >
-                  <Icon
-                    size={24}
-                    className="text-oasis-black"
-                    strokeWidth={2.5}
-                    aria-hidden="true"
-                  />
+                  <Icon size={22} color="#FFFFFF" strokeWidth={2} aria-hidden="true" />
                 </motion.div>
-                <span className="block text-center text-[10px] mt-1 text-oasis-green font-medium" aria-hidden="true">
-                  {tab.label}
-                </span>
               </Link>
             );
           }
@@ -72,35 +74,26 @@ export function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className="relative pt-2 pb-1 px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oasis-green rounded-lg"
+              className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue rounded-xl"
               role="tab"
               aria-selected={active}
               aria-label={`${tab.label}${active ? " (current page)" : ""}`}
             >
               <motion.div
-                className="flex flex-col items-center gap-0.5"
-                whileTap={{ scale: 0.85 }}
-                transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl relative"
+                whileTap={{ scale: 0.88 }}
+                transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                style={active ? { background: "rgba(0,122,255,0.08)" } : {}}
               >
-                <div className="relative">
-                  <Icon
-                    size={22}
-                    className={active ? "text-oasis-green" : "text-oasis-muted"}
-                    strokeWidth={active ? 2.5 : 1.8}
-                    aria-hidden="true"
-                  />
-                  {active && (
-                    <motion.div
-                      layoutId="nav-indicator"
-                      className="absolute -top-2 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-oasis-green"
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
-                </div>
+                <Icon
+                  size={21}
+                  aria-hidden="true"
+                  strokeWidth={active ? 2.5 : 1.8}
+                  color={active ? "#007AFF" : "#8E8E93"}
+                />
                 <span
-                  className={`text-[10px] ${
-                    active ? "text-oasis-green font-medium" : "text-oasis-muted"
-                  }`}
+                  className="text-[10px] font-medium leading-none"
+                  style={{ color: active ? "#007AFF" : "#8E8E93" }}
                   aria-hidden="true"
                 >
                   {tab.label}
@@ -109,7 +102,7 @@ export function BottomNav() {
             </Link>
           );
         })}
-      </div>
-    </nav>
+      </nav>
+    </div>
   );
 }

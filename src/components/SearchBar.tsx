@@ -57,7 +57,7 @@ export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: Sear
           placeholder="Search products, brands..."
           aria-label="Search products and brands"
           className="w-full pl-11 pr-10 py-3 rounded-2xl bg-oasis-card border border-oasis-border text-sm text-oasis-text placeholder:text-oasis-muted focus:outline-none focus:border-oasis-green/40 focus:ring-1 focus:ring-oasis-green/20 transition-all"
-          animate={{ borderColor: focused ? "rgba(74,222,128,0.4)" : "rgba(30,46,37,1)" }}
+          animate={{ borderColor: focused ? "rgba(0,122,255,0.4)" : "#E5E5EA" }}
         />
         <AnimatePresence>
           {query && (

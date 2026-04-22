@@ -115,13 +115,14 @@ export default function ScanPage() {
   return (
     <div className="relative min-h-dvh bg-black">
       {/* Back button */}
-      <div className="absolute top-4 left-4 z-50">
+      <div className="absolute left-4 z-50" style={{ top: "max(1rem, calc(env(safe-area-inset-top) + 0.75rem))" }}>
         <Link href="/" aria-label="Go back to home page">
           <motion.div
             whileTap={{ scale: 0.9 }}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 px-3 py-2 rounded-full glass-dark border border-white/10"
+            className="flex items-center gap-2 px-3 py-2 rounded-full"
+            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}
           >
             <ArrowLeft size={16} className="text-white" aria-hidden="true" />
             <span className="text-xs font-medium text-white">Back</span>
@@ -209,7 +210,7 @@ export default function ScanPage() {
             >
               <PackageX size={36} className="text-oasis-muted" />
             </motion.div>
-            <h2 className="font-[family-name:var(--font-instrument)] text-xl text-oasis-text">Product Not Found</h2>
+            <h2 className="font-semibold text-[18px] text-oasis-text">Product Not Found</h2>
             <p className="text-sm text-oasis-muted text-center leading-relaxed max-w-xs">
               Barcode <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> isn&apos;t in our database yet. Photograph the label and our AI will analyze it.
             </p>

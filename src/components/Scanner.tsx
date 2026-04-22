@@ -140,7 +140,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   }
 
   return (
-    <div className="relative w-full h-[calc(100dvh-5rem)] bg-black overflow-hidden">
+    <div className="relative w-full h-dvh bg-black overflow-hidden">
       {/* Camera feed */}
       <div id="oasis-scanner" ref={scannerRef} className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
 
@@ -171,7 +171,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="absolute bottom-32 left-0 right-0 text-center pointer-events-none"
+            className="absolute left-0 right-0 text-center pointer-events-none"
+            style={{ bottom: "calc(max(8rem, env(safe-area-inset-bottom) + 7rem))" }}
           >
             <p className="text-sm text-white/80 font-medium">Point at barcode</p>
             <p className="text-xs text-white/50 mt-1">Hold steady for best results</p>
@@ -180,7 +181,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       </AnimatePresence>
 
       {/* Manual barcode entry below scanner */}
-      <div className="absolute bottom-24 left-0 right-0 flex justify-center px-6">
+      <div className="absolute left-0 right-0 flex justify-center px-6" style={{ bottom: "calc(max(6rem, env(safe-area-inset-bottom) + 5rem))" }}>
         <div className="w-full max-w-xs">
           <div className="flex gap-2">
             <input
@@ -205,12 +206,13 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       </div>
 
       {/* Photo button */}
-      <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
+      <div className="absolute left-0 right-0 flex justify-center gap-4" style={{ bottom: "max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem))" }}>
         {onPhoto && (
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handlePhotoCapture}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full glass border border-white/10 text-white text-sm font-medium"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium"
+            style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.25)" }}
           >
             <ImagePlus size={18} />
             Photo of Label

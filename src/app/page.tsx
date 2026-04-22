@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { motion, useInView } from "framer-motion";
-import { Camera, ChevronRight, Sparkles, TrendingDown, Zap, Shield, FlaskConical } from "lucide-react";
+import {
+  Camera, ChevronRight, TrendingDown, Shield, ShieldAlert,
+  UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby, Home as HomeIcon, Package
+} from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Onboarding } from "@/components/Onboarding";
@@ -14,12 +17,12 @@ import { useRef, useEffect, useState } from "react";
 
 const stagger = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07 } },
+  show: { transition: { staggerChildren: 0.06 } },
 };
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.33, 1, 0.68, 1] as const } },
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.33, 1, 0.68, 1] as const } },
 };
 
 function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
@@ -29,7 +32,7 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
 
   useEffect(() => {
     if (!inView) return;
-    const duration = 1200;
+    const duration = 1000;
     const start = performance.now();
     let frame: number;
     const tick = (now: number) => {
@@ -45,16 +48,34 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
   return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
 }
 
-const categoryIcons: Record<string, string> = {
-  Food: "🍚",
-  Beverages: "🥤",
-  Snacks: "🍿",
-  Skincare: "✨",
-  Baby: "👶",
-  Household: "🏠",
+// Lucide icons for categories — no more emojis
+const categoryIconMap: Record<string, { Icon: React.ElementType; bg: string; color: string }> = {
+  Food:      { Icon: UtensilsCrossed, bg: "#FFF3E8", color: "#FF6B00" },
+  Beverages: { Icon: Coffee,          bg: "#EBF3FF", color: "#007AFF" },
+  Snacks:    { Icon: Popcorn,         bg: "#FFF8E6", color: "#B87800" },
+  Skincare:  { Icon: Sparkles,        bg: "#F5EEFF", color: "#8B5CF6" },
+  Baby:      { Icon: Baby,            bg: "#FFF0F5", color: "#FF2D78" },
+  Household: { Icon: HomeIcon,        bg: "#F0FBF4", color: "#1E8040" },
 };
 
-// Map DB row to frontend Product shape
+// Fallback icon for unknown categories
+function CategoryIcon({ category, size = 18 }: { category: string; size?: number }) {
+  const cfg = categoryIconMap[category];
+  if (!cfg) {
+    return (
+      <div className="flex items-center justify-center w-10 h-10 rounded-[10px] shrink-0" style={{ background: "#F2F2F7" }}>
+        <Package size={size} color="#8E8E93" />
+      </div>
+    );
+  }
+  const { Icon, bg, color } = cfg;
+  return (
+    <div className="flex items-center justify-center w-10 h-10 rounded-[10px] shrink-0" style={{ background: bg }}>
+      <Icon size={size} color={color} />
+    </div>
+  );
+}
+
 function mapDbProduct(p: Record<string, unknown>): Product {
   const analysis = p.analysis as Record<string, unknown> | null;
   return {
@@ -68,15 +89,16 @@ function mapDbProduct(p: Record<string, unknown>): Product {
     grade: ((p.score_grade as string) || "C") as Product["grade"],
     image_url: (p.image_url as string) || "",
     analysis: analysis
-      ? {
-          summary: (analysis.summary as string) || "",
-          ingredients: [],
-          warnings: (analysis.warnings as string[]) || [],
-          healthier_alternative: (analysis.healthier_alternative as string) || "",
-        }
+      ? { summary: (analysis.summary as string) || "", ingredients: [], warnings: (analysis.warnings as string[]) || [], healthier_alternative: (analysis.healthier_alternative as string) || "" }
       : { summary: "", ingredients: [], warnings: [], healthier_alternative: "" },
   };
 }
+
+// Normalize DB category keys to display names
+const categoryMap: Record<string, string> = {
+  food: "Food", beverage: "Beverages", snack: "Snacks",
+  skincare: "Skincare", baby_food: "Baby", household: "Household",
+};
 
 export default function Home() {
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -91,16 +113,12 @@ export default function Home() {
 
   useEffect(() => {
     const onboarded = localStorage.getItem("oasis-onboarded");
-    if (!onboarded) {
-      setShowOnboarding(true);
-    }
+    if (!onboarded) setShowOnboarding(true);
     setScanCount(getScanCount());
     setCheckingOnboarding(false);
-
-    // Fetch data from Supabase
-    getTrendingProducts(6).then((data) => setTrending(data.map((d) => mapDbProduct(d as unknown as Record<string, unknown>))));
-    getWorstRated(4).then((data) => setWorst(data.map((d) => mapDbProduct(d as unknown as Record<string, unknown>))));
-    getRecentProducts(4).then((data) => setRecentlyAdded(data.map((d) => mapDbProduct(d as unknown as Record<string, unknown>))));
+    getTrendingProducts(6).then((d) => setTrending(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))));
+    getWorstRated(4).then((d) => setWorst(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))));
+    getRecentProducts(4).then((d) => setRecentlyAdded(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))));
     getProductCount().then(setProductCount);
     getFlaggedCount().then(setFlaggedCount);
     getCategoryCounts().then(setCatCounts);
@@ -109,228 +127,219 @@ export default function Home() {
   if (checkingOnboarding) return null;
   if (showOnboarding) {
     return (
-      <Onboarding
-        onComplete={() => {
-          localStorage.setItem("oasis-onboarded", "true");
-          setShowOnboarding(false);
-        }}
-      />
+      <Onboarding onComplete={() => { localStorage.setItem("oasis-onboarded", "true"); setShowOnboarding(false); }} />
     );
   }
 
-  // Map category counts to display format
-  const categoryMap: Record<string, string> = {
-    food: "Food",
-    beverage: "Beverages",
-    snack: "Snacks",
-    skincare: "Skincare",
-    baby_food: "Baby",
-    household: "Household",
-  };
   const displayCategories = categories.map((cat) => {
-    const dbKeys = Object.entries(categoryMap)
-      .filter(([, display]) => display === cat.name)
-      .map(([key]) => key);
-    const count = dbKeys.reduce((sum, key) => sum + (catCounts[key] || 0), 0);
-    return { ...cat, count };
+    const dbKeys = Object.entries(categoryMap).filter(([, d]) => d === cat.name).map(([k]) => k);
+    return { ...cat, count: dbKeys.reduce((s, k) => s + (catCounts[k] || 0), 0) };
   });
 
   return (
-    <div className="gradient-mesh min-h-dvh">
+    <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
       <motion.div
-        className="px-4 pt-12 pb-24 max-w-md sm:max-w-lg mx-auto"
+        className="pb-32 max-w-lg mx-auto"
         initial="hidden"
         animate="show"
         variants={stagger}
       >
-        {/* Hero — compact */}
-        <motion.div variants={fadeUp} className="mb-5">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 rounded-full bg-oasis-green/10 flex items-center justify-center">
-              <Sparkles size={12} className="text-oasis-green" />
-            </div>
-            <span className="text-[11px] font-semibold text-oasis-green tracking-wide uppercase">AI-Powered Safety</span>
-          </div>
-          <h1 className="font-[family-name:var(--font-instrument)] text-[2rem] leading-[1.05] text-oasis-text mb-2">
-            Know what&apos;s really<br />
-            <span className="text-oasis-green">in your food.</span>
-          </h1>
-          <p className="text-[13px] text-oasis-muted leading-relaxed max-w-[280px]">
-            Scan any Indian product barcode. Get instant AI safety analysis.
+        {/* ── Hero ── */}
+        <motion.div variants={fadeUp} className="px-4 pt-14 pb-6">
+          {/* Wordmark */}
+          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-5" style={{ color: "#8E8E93" }}>
+            Sift — AI Food Safety
           </p>
-        </motion.div>
+          <h1 className="text-[2.4rem] font-bold leading-[1.05] tracking-[-0.02em] text-black mb-3">
+            Know what&apos;s really<br />
+            <span style={{ color: "#007AFF" }}>in your food.</span>
+          </h1>
+          <p className="text-[15px] leading-relaxed mb-6" style={{ color: "#6D6D72" }}>
+            Scan any Indian product barcode for instant AI safety analysis and ingredient breakdown.
+          </p>
 
-        {/* CTA Button */}
-        <motion.div variants={fadeUp} className="mb-6">
+          {/* Scan CTA */}
           <Link href="/scan">
             <motion.div
-              whileTap={{ scale: 0.96 }}
-              className="relative flex items-center justify-center gap-3 w-full py-3.5 rounded-2xl bg-oasis-green text-oasis-black font-bold text-[15px] pulse-glow overflow-hidden"
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl font-semibold text-[16px] text-white"
+              style={{
+                background: "#007AFF",
+                boxShadow: "0 8px 24px rgba(0,122,255,0.32), 0 2px 8px rgba(0,122,255,0.16)",
+              }}
             >
-              <Camera size={20} strokeWidth={2.5} />
+              <Camera size={20} strokeWidth={2} />
               Scan a Product
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
             </motion.div>
           </Link>
         </motion.div>
 
-        {/* Stats bar */}
-        <motion.div variants={fadeUp} className="mb-6">
-          <div className="flex items-center justify-between px-1 py-3 rounded-2xl bg-oasis-card/60 border border-oasis-border/50">
-            <div className="flex-1 text-center">
-              <div className="text-base font-bold text-oasis-green">
-                <AnimatedCounter target={productCount || 0} />
-              </div>
-              <div className="text-[10px] text-oasis-muted mt-0.5">Products</div>
-            </div>
-            <div className="w-px h-8 bg-oasis-border/50" />
-            <div className="flex-1 text-center">
-              <div className="text-base font-bold text-oasis-orange">
-                <AnimatedCounter target={flaggedCount || 0} />
-              </div>
-              <div className="text-[10px] text-oasis-muted mt-0.5">Flagged</div>
-            </div>
-            <div className="w-px h-8 bg-oasis-border/50" />
-            <div className="flex-1 text-center">
-              <div className="text-base font-bold text-oasis-text">
-                <AnimatedCounter target={scanCount + 3420} suffix="+" />
-              </div>
-              <div className="text-[10px] text-oasis-muted mt-0.5">Scans Today</div>
+        {/* ── Stats ── */}
+        <motion.div variants={fadeUp} className="px-4 mb-8">
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+            <div className="grid grid-cols-3">
+              {[
+                { label: "Products Analyzed", value: <AnimatedCounter target={productCount || 0} />, color: "#007AFF", border: true },
+                { label: "Flagged Unsafe",    value: <AnimatedCounter target={flaggedCount || 0} />,  color: "#FF3B30", border: true },
+                { label: "Total Scans",       value: <AnimatedCounter target={scanCount + 3420} suffix="+" />, color: "#1C1C1E", border: false },
+              ].map(({ label, value, color, border }) => (
+                <div
+                  key={label}
+                  className="flex flex-col items-center py-5 px-2"
+                  style={border ? { borderRight: "0.5px solid rgba(0,0,0,0.08)" } : {}}
+                >
+                  <span className="text-[22px] font-bold tabular-nums leading-none" style={{ color }}>{value}</span>
+                  <span className="text-[10px] font-medium mt-1.5 text-center leading-tight" style={{ color: "#8E8E93" }}>{label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </motion.div>
 
-        {/* Trending Scans */}
+        {/* ── Trending ── */}
         {trending.length > 0 && (
-          <motion.div variants={fadeUp} className="mb-6">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
-                <Zap size={14} className="text-oasis-green" />
-                <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-                  Trending Scans
-                </h2>
-              </div>
-              <Link href="/search" className="flex items-center gap-0.5 text-[11px] text-oasis-green font-medium">
-                See all <ChevronRight size={13} />
+          <motion.div variants={fadeUp} className="mb-8">
+            <div className="flex items-center justify-between px-4 mb-3">
+              <h2 className="text-[17px] font-semibold text-black">Trending Scans</h2>
+              <Link href="/search" className="flex items-center gap-0.5 text-[13px] font-medium" style={{ color: "#007AFF" }}>
+                See all <ChevronRight size={14} />
               </Link>
             </div>
-            <div className="flex gap-2.5 overflow-x-auto hide-scrollbar scroll-snap-x pb-1 -mx-1 px-1">
-              {trending.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 + i * 0.06, duration: 0.4 }}
-                >
-                  <Link href={`/product/${p.id}`}>
-                    <motion.div
-                      whileTap={{ scale: 0.96 }}
-                      className="w-[130px] shrink-0 p-3 rounded-2xl bg-oasis-card border border-oasis-border hover:bg-oasis-card-hover transition-colors relative overflow-hidden"
-                    >
-                      <div className="text-3xl text-center mb-2">
-                        {categoryIcons[p.category] || "📦"}
-                      </div>
-                      <div className="flex justify-center mb-1.5">
-                        <ScoreRing score={p.safety_score} grade={p.grade} size="sm" animate={false} />
-                      </div>
-                      <h3 className="text-[11px] font-semibold text-oasis-text truncate text-center">
-                        {p.name}
-                      </h3>
-                      <p className="text-[10px] text-oasis-muted text-center mt-0.5">
-                        {p.brand}
-                      </p>
-                    </motion.div>
-                  </Link>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Worst Rated */}
-        {worst.length > 0 && (
-          <motion.div variants={fadeUp} className="mb-6">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
-                <TrendingDown size={14} className="text-oasis-red" />
-                <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-                  Worst Rated This Week
-                </h2>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {worst.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 + i * 0.06, duration: 0.4 }}
-                >
-                  <Link href={`/product/${p.id}`}>
-                    <motion.div
-                      whileTap={{ scale: 0.97 }}
-                      className="flex items-center gap-3 p-3 rounded-2xl bg-red-950/20 border border-red-400/10 hover:border-red-400/20 transition-all relative overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/[0.04] to-transparent pointer-events-none" />
-                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-400/10 text-lg shrink-0">
-                        {categoryIcons[p.category] || "📦"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-[13px] font-semibold text-oasis-text truncate">{p.name}</h3>
-                        <p className="text-[11px] text-oasis-muted">{p.brand}</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs font-bold text-red-400">{p.safety_score}</span>
-                        <div className="w-8 h-8 rounded-full border-2 border-red-400/30 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-red-400">{p.grade}</span>
+            <div className="flex gap-3 overflow-x-auto hide-scrollbar scroll-snap-x pb-1 pl-4 pr-4">
+              {trending.map((p, i) => {
+                const displayCat = categoryMap[p.category] || p.category;
+                const catCfg = categoryIconMap[displayCat];
+                return (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 + i * 0.05, duration: 0.35 }}
+                    className="shrink-0 scroll-snap-align-start"
+                  >
+                    <Link href={`/product/${p.id}`}>
+                      <motion.div
+                        whileTap={{ scale: 0.96 }}
+                        className="w-[138px] rounded-2xl bg-white overflow-hidden"
+                        style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}
+                      >
+                        {/* Color header */}
+                        <div
+                          className="h-[52px] flex items-center justify-center"
+                          style={{ background: catCfg?.bg || "#F2F2F7" }}
+                        >
+                          {catCfg
+                            ? <catCfg.Icon size={22} color={catCfg.color} />
+                            : <Package size={22} color="#8E8E93" />
+                          }
                         </div>
-                      </div>
-                    </motion.div>
-                  </Link>
-                </motion.div>
-              ))}
+                        <div className="p-3">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1 min-w-0 pr-1">
+                              <p className="text-[12px] font-semibold text-black truncate leading-tight">{p.name}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: "#8E8E93" }}>{p.brand}</p>
+                            </div>
+                            <ScoreRing score={p.safety_score} grade={p.grade} size="sm" animate={false} />
+                          </div>
+                        </div>
+                      </motion.div>
+                    </Link>
+                  </motion.div>
+                );
+              })}
             </div>
           </motion.div>
         )}
 
-        {/* Categories */}
-        <motion.div variants={fadeUp} className="mb-6">
-          <div className="flex items-center gap-2 mb-2.5">
-            <FlaskConical size={14} className="text-oasis-green" />
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-              Categories
-            </h2>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {displayCategories.map((cat, i) => (
-              <Link key={cat.name} href={`/search?category=${cat.name}`}>
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.5 + i * 0.05, duration: 0.3 }}
-                  whileTap={{ scale: 0.93 }}
-                  whileHover={{ borderColor: "rgba(74,222,128,0.3)" }}
-                  className="flex flex-col items-center gap-1 p-3 rounded-2xl bg-oasis-card border border-oasis-border transition-colors"
-                >
-                  <span className="text-2xl">{cat.icon}</span>
-                  <span className="text-[11px] font-semibold text-oasis-text">{cat.name}</span>
-                  <span className="text-[9px] text-oasis-muted">{cat.count} items</span>
-                </motion.div>
-              </Link>
-            ))}
+        {/* ── Worst Rated ── */}
+        {worst.length > 0 && (
+          <motion.div variants={fadeUp} className="px-4 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(255,59,48,0.1)" }}>
+                <TrendingDown size={11} style={{ color: "#FF3B30" }} />
+              </div>
+              <h2 className="text-[17px] font-semibold text-black">Worst Rated This Week</h2>
+            </div>
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              {worst.map((p, i) => {
+                const displayCat = categoryMap[p.category] || p.category;
+                const catCfg = categoryIconMap[displayCat];
+                return (
+                  <motion.div
+                    key={p.id}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + i * 0.05, duration: 0.35 }}
+                    style={i > 0 ? { borderTop: "0.5px solid rgba(0,0,0,0.07)" } : {}}
+                  >
+                    <Link href={`/product/${p.id}`}>
+                      <motion.div whileTap={{ scale: 0.98 }} className="flex items-center gap-3 px-4 py-3.5">
+                        <div className="flex items-center justify-center w-9 h-9 rounded-[10px] shrink-0" style={{ background: catCfg?.bg || "#F2F2F7" }}>
+                          {catCfg
+                            ? <catCfg.Icon size={16} color={catCfg.color} />
+                            : <Package size={16} color="#8E8E93" />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] font-semibold text-black truncate">{p.name}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: "#8E8E93" }}>{p.brand}</p>
+                        </div>
+                        <ScoreRing score={p.safety_score} grade={p.grade} size="sm" animate={false} />
+                      </motion.div>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Categories ── */}
+        <motion.div variants={fadeUp} className="px-4 mb-8">
+          <h2 className="text-[17px] font-semibold text-black mb-3">Browse by Category</h2>
+          <div className="grid grid-cols-3 gap-2.5">
+            {displayCategories.map((cat, i) => {
+              const cfg = categoryIconMap[cat.name];
+              return (
+                <Link key={cat.name} href={`/search?category=${cat.name}`}>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 + i * 0.04 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-white"
+                    style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}
+                  >
+                    {cfg ? (
+                      <div className="w-10 h-10 rounded-[12px] flex items-center justify-center" style={{ background: cfg.bg }}>
+                        <cfg.Icon size={20} color={cfg.color} />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-[12px] flex items-center justify-center" style={{ background: "#F2F2F7" }}>
+                        <Package size={20} color="#8E8E93" />
+                      </div>
+                    )}
+                    <div className="text-center">
+                      <p className="text-[12px] font-semibold text-black">{cat.name}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#8E8E93" }}>{cat.count} items</p>
+                    </div>
+                  </motion.div>
+                </Link>
+              );
+            })}
           </div>
         </motion.div>
 
-        {/* Recently Added */}
+        {/* ── Recently Added ── */}
         {recentlyAdded.length > 0 && (
-          <motion.div variants={fadeUp}>
-            <div className="flex items-center gap-2 mb-2.5">
-              <Shield size={14} className="text-oasis-green" />
-              <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text">
-                Recently Added
-              </h2>
+          <motion.div variants={fadeUp} className="px-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,122,255,0.1)" }}>
+                <Shield size={11} style={{ color: "#007AFF" }} />
+              </div>
+              <h2 className="text-[17px] font-semibold text-black">Recently Added</h2>
             </div>
-            <div className="space-y-2">
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
               {recentlyAdded.map((p, i) => (
                 <ProductCard key={p.id} product={p} index={i} />
               ))}
@@ -338,15 +347,15 @@ export default function Home() {
           </motion.div>
         )}
 
-        {/* Empty state when no products yet */}
+        {/* ── Empty state ── */}
         {productCount === 0 && !trending.length && (
-          <motion.div variants={fadeUp} className="text-center py-12">
-            <span className="text-5xl mb-4 block">🌱</span>
-            <h2 className="font-[family-name:var(--font-instrument)] text-lg text-oasis-text mb-2">
-              Start Scanning!
-            </h2>
-            <p className="text-sm text-oasis-muted max-w-xs mx-auto">
-              Scan your first product barcode to build your safety database. Every scan makes Oasis smarter.
+          <motion.div variants={fadeUp} className="text-center py-16 px-4">
+            <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(0,122,255,0.08)" }}>
+              <ShieldAlert size={28} style={{ color: "#007AFF" }} />
+            </div>
+            <h2 className="text-[18px] font-semibold text-black mb-2">Start Scanning</h2>
+            <p className="text-[14px] leading-relaxed max-w-xs mx-auto" style={{ color: "#8E8E93" }}>
+              Scan your first product barcode to build your safety database.
             </p>
           </motion.div>
         )}

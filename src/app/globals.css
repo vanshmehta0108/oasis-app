@@ -1,24 +1,44 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-oasis-black: #0a0f0d;
-  --color-oasis-dark: #0d1410;
-  --color-oasis-card: #131c17;
-  --color-oasis-card-hover: #1a2620;
-  --color-oasis-border: #1e2e25;
-  --color-oasis-green: #4ade80;
-  --color-oasis-green-dim: #22c55e;
-  --color-oasis-green-glow: rgba(74, 222, 128, 0.15);
-  --color-oasis-lime: #a3e635;
-  --color-oasis-amber: #fbbf24;
-  --color-oasis-orange: #fb923c;
-  --color-oasis-red: #f87171;
-  --color-oasis-muted: #6b7c72;
-  --color-oasis-text: #f0fdf4;
-  --color-oasis-text-secondary: #9ca3af;
+  /* ── Sift iOS-native palette ── */
+  --color-sift-bg:              #F2F2F7;
+  --color-sift-surface:         #FFFFFF;
+  --color-sift-elevated:        #FFFFFF;
+  --color-sift-label:           #000000;
+  --color-sift-label-2:         #8E8E93;
+  --color-sift-label-3:         #C7C7CC;
+  --color-sift-separator:       #C6C6C8;
+  --color-sift-sep-opaque:      #E5E5EA;
+  --color-sift-blue:            #007AFF;
+  --color-sift-blue-bg:         #EBF3FF;
+  --color-sift-green:           #34C759;
+  --color-sift-yellow:          #FF9F0A;
+  --color-sift-orange:          #FF6B00;
+  --color-sift-red:             #FF3B30;
+  --color-sift-fill:            rgba(120,120,128,0.12);
+  --color-sift-fill-2:          rgba(120,120,128,0.08);
 
-  --font-heading: "Instrument Serif", serif;
-  --font-body: "DM Sans", sans-serif;
+  /* ── Legacy aliases — keep existing class names working ── */
+  --color-oasis-black:          #F2F2F7;
+  --color-oasis-dark:           #E5E5EA;
+  --color-oasis-card:           #FFFFFF;
+  --color-oasis-card-hover:     #F2F2F7;
+  --color-oasis-border:         #E5E5EA;
+  --color-oasis-green:          #007AFF;
+  --color-oasis-green-dim:      #0056CC;
+  --color-oasis-green-glow:     rgba(0,122,255,0.12);
+  --color-oasis-lime:           #34C759;
+  --color-oasis-amber:          #FF9F0A;
+  --color-oasis-orange:         #FF6B00;
+  --color-oasis-red:            #FF3B30;
+  --color-oasis-muted:          #8E8E93;
+  --color-oasis-text:           #000000;
+  --color-oasis-text-secondary: #8E8E93;
+
+  /* ── Typography ── */
+  --font-heading: var(--font-inter, "Inter", system-ui, -apple-system, sans-serif);
+  --font-body:    var(--font-inter, "Inter", system-ui, -apple-system, sans-serif);
 }
 
 * {
@@ -26,204 +46,148 @@
 }
 
 html {
-  background: #0a0f0d;
-  color-scheme: dark;
+  background: #F2F2F7;
+  color-scheme: light;
   scroll-behavior: smooth;
 }
 
 body {
-  font-family: var(--font-body);
-  background: #0a0f0d;
-  color: #f0fdf4;
+  font-family: var(--font-inter, "Inter", system-ui, -apple-system, sans-serif);
+  background: #F2F2F7;
+  color: #000000;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   overscroll-behavior-y: contain;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #1e2e25;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2a3f32;
-}
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C7C7CC; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #8E8E93; }
 
-/* Hide scrollbar for horizontal scroll containers */
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Glass morphism utilities */
+/* ── iOS glass navigation bar ── */
 .glass {
-  background: rgba(13, 20, 16, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(242, 242, 247, 0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 .glass-light {
-  background: rgba(19, 28, 23, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
 }
 
 .glass-dark {
-  background: rgba(10, 15, 13, 0.9);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(249, 249, 249, 0.95);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
 }
 
-/* Gradient mesh background */
+/* ── Background (legacy classes now light) ── */
 .gradient-mesh {
-  background:
-    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(74, 222, 128, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 80% at 80% 20%, rgba(34, 197, 94, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 60% at 50% 80%, rgba(74, 222, 128, 0.04) 0%, transparent 50%),
-    #0a0f0d;
+  background: #F2F2F7;
 }
 
 .gradient-mesh-intense {
-  background:
-    radial-gradient(ellipse 80% 50% at 20% 30%, rgba(74, 222, 128, 0.12) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 80% at 80% 10%, rgba(34, 197, 94, 0.1) 0%, transparent 50%),
-    radial-gradient(ellipse 70% 60% at 60% 80%, rgba(74, 222, 128, 0.06) 0%, transparent 50%),
-    #0a0f0d;
+  background: #F2F2F7;
 }
 
-/* Pulse glow animation */
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(74, 222, 128, 0.3), 0 0 60px rgba(74, 222, 128, 0.1);
-  }
-  50% {
-    box-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 80px rgba(74, 222, 128, 0.2);
-  }
+/* ── iOS card shadow ── */
+.ios-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
 }
 
-.pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* Scan line animation */
-@keyframes scan-line {
-  0%, 100% { top: 0; }
-  50% { top: calc(100% - 2px); }
-}
-
-.scan-line {
-  animation: scan-line 2s ease-in-out infinite;
-}
-
-/* Corner bracket pulse */
-@keyframes bracket-pulse {
-  0%, 100% { opacity: 1; border-color: #4ade80; }
-  50% { opacity: 0.5; border-color: #22c55e; }
-}
-
-.bracket-pulse {
-  animation: bracket-pulse 1.5s ease-in-out infinite;
-}
-
-/* Shimmer / skeleton loading */
+/* ── Shimmer — light mode ── */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 
 .shimmer {
-  background: linear-gradient(90deg, #131c17 25%, #1a2620 50%, #131c17 75%);
+  background: linear-gradient(90deg, #E5E5EA 25%, #F5F5F7 50%, #E5E5EA 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
-/* Shine sweep for premium cards */
+/* ── Scan line ── */
+@keyframes scan-line {
+  0%, 100% { top: 0; }
+  50%       { top: calc(100% - 2px); }
+}
+.scan-line { animation: scan-line 2s ease-in-out infinite; }
+
+/* ── Corner brackets ── */
+@keyframes bracket-pulse {
+  0%, 100% { opacity: 1; border-color: #007AFF; }
+  50%       { opacity: 0.5; border-color: #0056CC; }
+}
+.bracket-pulse { animation: bracket-pulse 1.5s ease-in-out infinite; }
+
+/* ── Shine sweep ── */
 @keyframes shine-sweep {
-  0% { transform: translateX(-100%); }
+  0%   { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
-
 .shine-sweep::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
   animation: shine-sweep 3s ease-in-out infinite;
 }
 
-/* Score ring pulse for lg */
-@keyframes ring-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.05); opacity: 0.8; }
-}
-
-/* Horizontal scroll snap */
-.scroll-snap-x {
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-}
-
-.scroll-snap-x > * {
-  scroll-snap-align: start;
-}
-
-/* Safe area bottom nav */
-.safe-bottom {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
-}
-
-/* Warning pulse */
+/* ── Warning pulse ── */
 @keyframes warning-pulse {
-  0%, 100% { border-color: rgba(248, 113, 113, 0.2); }
-  50% { border-color: rgba(248, 113, 113, 0.5); }
+  0%, 100% { border-color: rgba(255,59,48,0.15); }
+  50%       { border-color: rgba(255,59,48,0.35); }
 }
+.warning-pulse { animation: warning-pulse 2s ease-in-out infinite; }
 
-.warning-pulse {
-  animation: warning-pulse 2s ease-in-out infinite;
+/* ── Pulse (iOS blue) ── */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 4px 16px rgba(0,122,255,0.22); }
+  50%       { box-shadow: 0 6px 24px rgba(0,122,255,0.38); }
 }
+.pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 
-/* Counter animation helper */
+/* ── Count-up ── */
 @keyframes count-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.count-up { animation: count-up 0.5s ease-out forwards; }
 
-.count-up {
-  animation: count-up 0.6s ease-out forwards;
-}
+/* ── Safe area ── */
+.safe-bottom { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
 
-/* Focus-visible ring for keyboard navigation */
+/* ── Scroll snap ── */
+.scroll-snap-x { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.scroll-snap-x > * { scroll-snap-align: start; }
+
+/* ── Focus rings ── */
 *:focus-visible {
-  outline: 2px solid #4ade80;
+  outline: 2px solid #007AFF;
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
+*:focus:not(:focus-visible) { outline: none; }
 
-/* Remove default focus for mouse users */
-*:focus:not(:focus-visible) {
-  outline: none;
-}
-
-/* Screen reader only utility */
+/* ── Screen reader ── */
 .sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border-width: 0;
+}
+
+/* ── iOS grouped section rows ── */
+.ios-section-row + .ios-section-row {
+  border-top: 0.5px solid rgba(60,60,67,0.18);
 }
