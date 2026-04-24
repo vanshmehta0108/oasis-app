@@ -85,8 +85,8 @@ function mapDbProduct(p: Record<string, unknown>): Product {
     brand: (p.brand as string) || "Unknown",
     category: (p.category as string) || "food",
     ingredients: (p.ingredients as string[]) || [],
-    safety_score: (p.safety_score as number) || 0,
-    grade: ((p.score_grade as string) || "C") as Product["grade"],
+    safety_score: p.safety_score != null ? (p.safety_score as number) : null,
+    grade: ((p.score_grade as string) || null) as Product["grade"],
     image_url: (p.image_url as string) || "",
     analysis: analysis
       ? { summary: (analysis.summary as string) || "", ingredients: [], warnings: (analysis.warnings as string[]) || [], healthier_alternative: (analysis.healthier_alternative as string) || "" }

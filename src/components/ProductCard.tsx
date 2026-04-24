@@ -70,15 +70,15 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
           </div>
 
           {/* Score */}
-          {!isOFF ? (
-            <ScoreRing score={product.safety_score} grade={product.grade} size="sm" animate={false} />
+          {!isOFF && product.safety_score != null ? (
+            <ScoreRing score={product.safety_score} grade={product.grade ?? "?"} size="sm" animate={false} />
           ) : (
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center"
               style={{ background: "#F2F2F7" }}
             >
               <span className="text-[9px] font-medium text-center leading-tight" style={{ color: "#8E8E93" }}>
-                Tap to<br />analyze
+                {isOFF ? "Tap to\nanalyze" : "Not\nscored"}
               </span>
             </div>
           )}
@@ -108,7 +108,13 @@ export function ProductCardHorizontal({ product }: { product: Product }) {
         <div className="p-3">
           <div className="flex justify-between items-start mb-1">
             <p className="text-[12px] font-semibold text-black truncate leading-snug flex-1 pr-1">{product.name}</p>
-            <ScoreRing score={product.safety_score} grade={product.grade} size="sm" animate={false} />
+            {product.safety_score != null ? (
+              <ScoreRing score={product.safety_score} grade={product.grade ?? "?"} size="sm" animate={false} />
+            ) : (
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#F2F2F7" }}>
+                <span className="text-[8px] font-medium text-center leading-tight" style={{ color: "#8E8E93" }}>Not{"\n"}scored</span>
+              </div>
+            )}
           </div>
           <p className="text-[10px]" style={{ color: "#8E8E93" }}>{product.brand}</p>
         </div>

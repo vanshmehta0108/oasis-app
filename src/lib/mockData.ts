@@ -20,8 +20,8 @@ export interface Product {
   brand: string;
   category: string;
   ingredients: string[];
-  safety_score: number;
-  grade: "A" | "B" | "C" | "D" | "E";
+  safety_score: number | null;
+  grade: "A" | "B" | "C" | "D" | "E" | null;
   image_url: string;
   analysis: ProductAnalysis;
 }
