@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# large data files — never deploy or commit
+Oasis-*
+scripts/.off-dump.jsonl.gz
+scripts/.obf-dump.jsonl.gz
+scripts/*.jsonl.gz
+scripts/.fix-score-checkpoint.json
+scripts/.import-checkpoint.json
