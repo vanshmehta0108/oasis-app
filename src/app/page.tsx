@@ -181,7 +181,7 @@ export default function Home() {
               {[
                 { label: "Products Analyzed", value: <AnimatedCounter target={productCount || 0} />, color: "#007AFF", border: true },
                 { label: "Flagged Unsafe",    value: <AnimatedCounter target={flaggedCount || 0} />,  color: "#FF3B30", border: true },
-                { label: "Total Scans",       value: <AnimatedCounter target={scanCount + 3420} suffix="+" />, color: "#1C1C1E", border: false },
+                { label: "Total Scans",       value: <AnimatedCounter target={scanCount} suffix="+" />, color: "#1C1C1E", border: false },
               ].map(({ label, value, color, border }) => (
                 <div
                   key={label}

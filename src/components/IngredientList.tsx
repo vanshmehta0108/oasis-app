@@ -58,12 +58,13 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
         const riskKey = (("risk" in ing ? ing.risk : (ing as { risk_level?: string }).risk_level) || "caution") as string;
         const cfg = riskConfig[riskKey as keyof typeof riskConfig] ?? riskConfig.caution;
         const Icon = cfg.icon;
-        const isOpen = expanded === ing.name;
+        const itemKey = `${ing.name}-${i}`; // index prevents duplicate-name key collisions
+        const isOpen = expanded === itemKey;
 
         return (
           <motion.button
-            key={ing.name}
-            onClick={() => setExpanded(isOpen ? null : ing.name)}
+            key={itemKey}
+            onClick={() => setExpanded(isOpen ? null : itemKey)}
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05, duration: 0.3 }}
@@ -71,7 +72,7 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
             layout
             role="listitem"
             aria-expanded={isOpen}
-            aria-label={`${ing.name}: ${cfg.label} risk level. ${isOpen ? "Collapse" : "Expand"} for details.`}
+            aria-label={`${ing.name}: ${cfg.label} risk level. ${isOpen ? "Collapse" : "Expand"} for details`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5 min-w-0">

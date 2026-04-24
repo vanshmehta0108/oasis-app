@@ -15,11 +15,13 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !!localStorage.getItem("oasis-onboarded") && window.location.pathname !== "/scan";
+  });
 
   useEffect(() => {
-    const onboarded = localStorage.getItem("oasis-onboarded");
-    setVisible(!!onboarded && pathname !== "/scan");
+    setVisible(!!localStorage.getItem("oasis-onboarded") && pathname !== "/scan");
   }, [pathname]);
 
   if (!visible) return null;
@@ -39,7 +41,6 @@ export function BottomNav() {
           border: "0.5px solid rgba(0,0,0,0.08)",
         }}
         aria-label="Main navigation"
-        role="tablist"
       >
         {tabs.map((tab) => {
           const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
@@ -51,9 +52,8 @@ export function BottomNav() {
                 key={tab.href}
                 href={tab.href}
                 className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue rounded-full mx-1"
-                role="tab"
-                aria-selected={active}
                 aria-label="Scan a product"
+                aria-current={active ? "page" : undefined}
               >
                 <motion.div
                   whileTap={{ scale: 0.88 }}
@@ -75,9 +75,8 @@ export function BottomNav() {
               key={tab.href}
               href={tab.href}
               className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue rounded-xl"
-              role="tab"
-              aria-selected={active}
-              aria-label={`${tab.label}${active ? " (current page)" : ""}`}
+              aria-label={tab.label}
+              aria-current={active ? "page" : undefined}
             >
               <motion.div
                 className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl relative"

@@ -48,7 +48,11 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
   const goNext = useCallback(() => { setDirection(1); setStep((s) => Math.min(s + 1, totalSteps - 1)); }, []);
   const finish = useCallback(() => {
-    localStorage.setItem("oasis-profile", JSON.stringify({ conditions, allergies }));
+    // Save labels (not IDs) so Profile page's healthConditions.name comparison works
+    const conditionLabels = conditions.map(
+      (id) => HEALTH_CONDITIONS.find((h) => h.id === id)?.label ?? id
+    );
+    localStorage.setItem("oasis-profile", JSON.stringify({ conditions: conditionLabels, allergies }));
     onComplete();
   }, [conditions, allergies, onComplete]);
 

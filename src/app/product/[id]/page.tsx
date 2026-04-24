@@ -80,9 +80,11 @@ function mapRawToProduct(data: Record<string, unknown>): ProductData {
     category: (data.category as string) || "",
     ingredients: (data.ingredients as string[]) || [],
     safety_score: (data.safety_score as number) ?? null,
-    grade: (data.grade as string) ?? null,
+    grade: (data.grade as string) ?? (data.score_grade as string) ?? null,
     image_url: data.image_url as string | undefined,
-    analysis: data.analysis as ProductData["analysis"] | undefined,
+    analysis: data.analysis
+      ? mapAnalysisJson(data.analysis as Record<string, unknown>)
+      : undefined,
   };
 }
 
@@ -511,13 +513,15 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
                   {product.analysis.healthier_alternative}
                 </p>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  className="flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg bg-[#1E8040]/10 border border-[#1E8040]/20 text-[#1E8040] text-xs font-semibold"
+                <Link
+                  href={`https://www.amazon.in/s?k=${encodeURIComponent(product.analysis?.healthier_alternative?.split(".")[0] || product.name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg bg-[#1E8040]/10 border border-[#1E8040]/20 text-[#1E8040] text-xs font-semibold"
                 >
                   <ExternalLink size={12} />
                   Shop Now
-                </motion.button>
+                </Link>
               </div>
             </div>
           </motion.div>

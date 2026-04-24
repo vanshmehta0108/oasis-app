@@ -20,18 +20,17 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const hasScannedRef = useRef(false);
 
   const stopScanner = useCallback(async () => {
-    if (html5QrRef.current) {
+    const scanner = html5QrRef.current;
+    html5QrRef.current = null; // clear ref first so concurrent startScanner won't use a stale instance
+    if (scanner) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const scanner = html5QrRef.current as any;
-        if (scanner.isScanning) {
-          await scanner.stop();
-        }
-        scanner.clear();
+        const s = scanner as any;
+        if (s.isScanning) await s.stop();
+        s.clear();
       } catch {
         // ignore cleanup errors
       }
-      html5QrRef.current = null;
     }
   }, []);
 
@@ -45,6 +44,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
         if (!mounted || !scannerRef.current) return;
+        // Guard against a previous stopScanner not completing yet
+        if (html5QrRef.current) return;
 
         const scanner = new Html5Qrcode("oasis-scanner");
         html5QrRef.current = scanner;

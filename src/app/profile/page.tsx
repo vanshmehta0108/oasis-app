@@ -27,25 +27,24 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.33, 1, 0.68, 1] as const } },
 };
 
+function loadProfile() {
+  if (typeof window === "undefined") return { conditions: [], allergies: [], language: "English" };
+  try {
+    const saved = localStorage.getItem("oasis-profile");
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { conditions: [], allergies: [], language: "English" };
+}
+
 export default function ProfilePage() {
-  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
-  const [allergies, setAllergies] = useState<string[]>(["Peanuts"]);
+  const [selectedConditions, setSelectedConditions] = useState<string[]>(() => loadProfile().conditions ?? []);
+  const [allergies, setAllergies] = useState<string[]>(() => loadProfile().allergies ?? []);
   const [allergyInput, setAllergyInput] = useState("");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState<string>(() => loadProfile().language ?? "English");
   const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
   const [scanCount, setScanCount] = useState(0);
 
-  // Load profile from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem("oasis-profile");
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        if (data.conditions) setSelectedConditions(data.conditions);
-        if (data.allergies) setAllergies(data.allergies);
-        if (data.language) setLanguage(data.language);
-      } catch {}
-    }
     setScanHistory(getScanHistory());
     setScanCount(getScanCount());
   }, []);

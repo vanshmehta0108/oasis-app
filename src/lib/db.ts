@@ -122,15 +122,17 @@ export async function getFlaggedCount(): Promise<number> {
 }
 
 export async function getCategoryCounts(): Promise<Record<string, number>> {
-  const { data } = await supabase
-    .from("products")
-    .select("category");
-
-  const counts: Record<string, number> = {};
-  ((data as { category: string }[]) || []).forEach((row) => {
-    counts[row.category] = (counts[row.category] || 0) + 1;
-  });
-  return counts;
+  const cats = ["food","beverage","snack","dairy","baby_food","skincare","haircare","cosmetic","household","water"];
+  const results = await Promise.all(
+    cats.map(async (cat) => {
+      const { count } = await supabase
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("category", cat);
+      return [cat, count ?? 0] as const;
+    })
+  );
+  return Object.fromEntries(results);
 }
 
 // ── Mutations ───────────────────────────────────────────────────────────────
@@ -172,11 +174,11 @@ export async function recordScan(
   );
 
   if (rpcError) {
-    // Fallback: manual increment
+    // Fallback: manual increment (productId is a barcode, not UUID)
     const { data: product } = await supabase
       .from("products")
       .select("scan_count")
-      .eq("id", productId)
+      .eq("barcode", productId)
       .single();
 
     if (product) {
@@ -184,7 +186,7 @@ export async function recordScan(
       await supabase
         .from("products")
         .update({ scan_count: currentCount + 1 })
-        .eq("id", productId);
+        .eq("barcode", productId);
     }
   }
 }
