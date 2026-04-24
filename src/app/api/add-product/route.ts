@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { upsertProduct } from "@/lib/db";
+import type { ScoreGrade } from "@/lib/database.types";
 
 const AddProductRequest = z.object({
   name: z.string().min(1, "Product name is required"),
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       ...(analysis
         ? {
             safety_score: analysis.score,
-            score_grade: analysis.grade,
+            score_grade: analysis.grade as ScoreGrade,
             analysis: {
               ...analysis,
               healthier_alternative: analysis.healthier_tip,
