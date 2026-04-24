@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 interface ScoreRingProps {
-  score: number;
-  grade: string;
+  score: number | null;
+  grade: string | null;
   size?: "sm" | "md" | "lg";
   animate?: boolean;
 }
@@ -31,11 +31,13 @@ function getGradeLabel(score: number) {
 }
 
 export function ScoreRing({ score, grade, size = "md", animate = true }: ScoreRingProps) {
-  const [displayScore, setDisplayScore] = useState(animate ? 0 : score);
+  const safeScore = score ?? 0;
+  const safeGrade = grade ?? "?";
+  const [displayScore, setDisplayScore] = useState(animate ? 0 : safeScore);
   const cfg = sizeMap[size];
   const radius = (cfg.dim - cfg.stroke * 2) / 2;
   const circumference = 2 * Math.PI * radius;
-  const color = getScoreColor(score);
+  const color = getScoreColor(safeScore);
   const offset = circumference - (displayScore / 100) * circumference;
 
   useEffect(() => {
@@ -47,19 +49,19 @@ export function ScoreRing({ score, grade, size = "md", animate = true }: ScoreRi
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayScore(Math.round(eased * score));
+      setDisplayScore(Math.round(eased * safeScore));
       if (progress < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [score, animate]);
+  }, [safeScore, animate]);
 
   return (
     <div
       className="relative inline-flex items-center justify-center"
       style={{ width: cfg.dim, height: cfg.dim }}
       role="img"
-      aria-label={`Safety score: ${score} out of 100, Grade ${grade} — ${getGradeLabel(score)}`}
+      aria-label={`Safety score: ${safeScore} out of 100, Grade ${safeGrade} — ${getGradeLabel(safeScore)}`}
     >
       <svg width={cfg.dim} height={cfg.dim} className="-rotate-90" aria-hidden="true">
         {/* Track */}
@@ -96,7 +98,7 @@ export function ScoreRing({ score, grade, size = "md", animate = true }: ScoreRi
           {displayScore}
         </span>
         <span className={`${cfg.gradeSize} font-semibold mt-0.5`} style={{ color: "#8E8E93" }}>
-          {grade}
+          {safeGrade}
         </span>
       </div>
     </div>

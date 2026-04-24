@@ -7,11 +7,11 @@ import { PackageX, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import { Scanner } from "@/components/Scanner";
 import Link from "next/link";
 
-type ScanState = "scanning" | "loading" | "not-found" | "analyzing-photo";
+type ScanState = "scanning" | "looking-up" | "analyzing" | "not-found" | "analyzing-photo";
 
 interface LookupResult {
   found: boolean;
-  source?: "local" | "openfoodfacts" | "web";
+  source?: "local" | "master" | "database" | "openfoodfacts" | "web";
   product?: {
     id: string;
     barcode: string;
@@ -19,25 +19,31 @@ interface LookupResult {
     brand: string;
     category: string;
     ingredients: string[];
-    safety_score?: number;
-    grade?: string;
+    safety_score?: number | null;
+    grade?: string | null;
     image_url?: string;
     analysis?: unknown;
   };
   needs_analysis?: boolean;
 }
 
+function mapIngredient(ing: { name: string; risk_level?: string; risk?: string; explanation: string }) {
+  return { name: ing.name, risk: ing.risk || ing.risk_level || "caution", explanation: ing.explanation };
+}
+
 export default function ScanPage() {
   const router = useRouter();
   const [state, setState] = useState<ScanState>("scanning");
   const [scannedBarcode, setScannedBarcode] = useState("");
-  const [manualBarcode, setManualBarcode] = useState("");
+  const [loadingLabel, setLoadingLabel] = useState("Looking Up Product...");
+  const [loadingNote, setLoadingNote] = useState("");
 
   const handleScan = useCallback(async (barcode: string) => {
-    // Haptic feedback on successful scan
-    if (navigator.vibrate) navigator.vibrate(50);
+    if (navigator.vibrate) navigator.vibrate(60);
     setScannedBarcode(barcode);
-    setState("loading");
+    setState("looking-up");
+    setLoadingLabel("Looking Up Product...");
+    setLoadingNote(`Barcode: ${barcode}`);
 
     try {
       const res = await fetch("/api/lookup", {
@@ -46,34 +52,73 @@ export default function ScanPage() {
         body: JSON.stringify({ barcode }),
       });
 
-      if (res.ok) {
-        const data: LookupResult = await res.json();
-        if (data.found && data.product) {
-          // Store product data in sessionStorage for the product page
-          if (data.source === "openfoodfacts") {
-            sessionStorage.setItem(
-              `off-product-${barcode}`,
-              JSON.stringify({ ...data.product, needs_analysis: data.needs_analysis })
-            );
-          } else if (data.source === "web") {
-            sessionStorage.setItem(
-              `web-product-${barcode}`,
-              JSON.stringify({ ...data.product, needs_analysis: data.needs_analysis })
-            );
+      if (!res.ok) { setState("not-found"); return; }
+
+      const data: LookupResult = await res.json();
+      if (!data.found || !data.product) { setState("not-found"); return; }
+
+      let product = data.product;
+
+      // Always compute a score on the spot if we have ingredients
+      if (data.needs_analysis && product.ingredients?.length > 0) {
+        setState("analyzing");
+        setLoadingLabel("Analysing Ingredients...");
+        setLoadingNote("AI is scoring each ingredient for safety");
+
+        try {
+          const aRes = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ingredients: product.ingredients,
+              category: product.category || "food",
+              barcode,
+              name: product.name,
+              brand: product.brand,
+            }),
+          });
+          if (aRes.ok) {
+            const aData = await aRes.json();
+            if (aData.analysis) {
+              product = {
+                ...product,
+                safety_score: aData.analysis.score,
+                grade: aData.analysis.grade,
+                analysis: {
+                  summary: aData.analysis.summary,
+                  ingredients: (aData.analysis.ingredients || []).map(mapIngredient),
+                  warnings: aData.analysis.warnings || [],
+                  healthier_alternative: aData.analysis.healthier_tip || aData.analysis.healthier_alternative || "",
+                },
+              };
+            }
           }
-          router.push(`/product/${data.product.id}`);
-          return;
+        } catch {
+          // analysis failed — product page will show label scan prompt
         }
       }
-      setState("not-found");
-    } catch (err) {
-      console.error("Lookup failed:", err);
+
+      // Store enriched product data for the product page
+      const source = data.source;
+      if (source === "openfoodfacts") {
+        sessionStorage.setItem(`off-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
+      } else if (source === "web") {
+        sessionStorage.setItem(`web-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
+      } else if ((source === "database" || source === "master") && product.analysis) {
+        // Cache enriched DB product so product page doesn't re-fetch
+        sessionStorage.setItem(`db-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
+      }
+
+      router.push(`/product/${product.id}`);
+    } catch {
       setState("not-found");
     }
   }, [router]);
 
   const handlePhoto = async (base64: string) => {
     setState("analyzing-photo");
+    setLoadingLabel("Reading Ingredient Label...");
+    setLoadingNote("AI is extracting and scoring ingredients");
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
@@ -82,35 +127,34 @@ export default function ScanPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        const productId = data.product?.id || `analyzed-${Date.now()}`;
+        const productId = data.product?.barcode || data.product?.id || `analyzed-${Date.now()}`;
         sessionStorage.setItem(`analyzed-${productId}`, JSON.stringify({
           id: productId,
           name: data.label_extraction?.product_name || data.product?.name || "Scanned Product",
           brand: data.label_extraction?.brand || data.product?.brand || "Unknown",
           category: data.label_extraction?.category_guess || "food",
           ingredients: data.label_extraction?.ingredients || [],
-          safety_score: data.analysis?.score || null,
-          grade: data.analysis?.grade || null,
+          safety_score: data.analysis?.score ?? null,
+          grade: data.analysis?.grade ?? null,
+          fssai_license: data.label_extraction?.fssai_license ?? null,
           analysis: data.analysis ? {
             summary: data.analysis.summary,
-            ingredients: (data.analysis.ingredients || []).map((ing: { name: string; risk_level?: string; risk?: string; explanation: string }) => ({
-              name: ing.name,
-              risk: ing.risk || ing.risk_level || "caution",
-              explanation: ing.explanation,
-            })),
-            warnings: data.analysis.warnings,
-            healthier_alternative: data.analysis.healthier_tip,
+            ingredients: (data.analysis.ingredients || []).map(mapIngredient),
+            warnings: data.analysis.warnings || [],
+            healthier_alternative: data.analysis.healthier_tip || data.analysis.healthier_alternative || "",
           } : null,
         }));
         router.push(`/product/${productId}`);
       } else {
         setState("not-found");
       }
-    } catch (err) {
-      console.error("Photo analysis failed:", err);
+    } catch {
       setState("not-found");
     }
   };
+
+  const isLoading = state === "looking-up" || state === "analyzing" || state === "analyzing-photo";
+  const loadingDuration = state === "analyzing" || state === "analyzing-photo" ? 8 : 1.5;
 
   return (
     <div className="relative min-h-dvh bg-black">
@@ -122,7 +166,12 @@ export default function ScanPage() {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-2 px-3 py-2 rounded-full"
-            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", border: "1px solid rgba(255,255,255,0.18)" }}
+            style={{
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              border: "1px solid rgba(255,255,255,0.18)",
+            }}
           >
             <ArrowLeft size={16} className="text-white" aria-hidden="true" />
             <span className="text-xs font-medium text-white">Back</span>
@@ -132,17 +181,12 @@ export default function ScanPage() {
 
       <AnimatePresence mode="wait">
         {state === "scanning" && (
-          <motion.div
-            key="scanner"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div key="scanner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <Scanner onScan={handleScan} onPhoto={handlePhoto} />
           </motion.div>
         )}
 
-        {(state === "loading" || state === "analyzing-photo") && (
+        {isLoading && (
           <motion.div
             key="loading"
             initial={{ opacity: 0 }}
@@ -150,7 +194,6 @@ export default function ScanPage() {
             exit={{ opacity: 0 }}
             className="flex flex-col items-center justify-center h-dvh gap-5 gradient-mesh-intense"
           >
-            {/* Pulsing logo */}
             <motion.div
               className="relative w-20 h-20 rounded-full bg-oasis-green/10 flex items-center justify-center"
               animate={{ scale: [1, 1.1, 1] }}
@@ -165,28 +208,17 @@ export default function ScanPage() {
             </motion.div>
 
             <div className="text-center">
-              <p className="text-lg font-bold text-oasis-text">
-                {state === "analyzing-photo"
-                  ? "Analyzing Ingredients..."
-                  : "Looking Up Product..."}
-              </p>
-              <p className="text-xs text-oasis-muted mt-1.5">
-                {state === "analyzing-photo"
-                  ? "AI is reading the label"
-                  : `Barcode: ${scannedBarcode}`}
-              </p>
+              <p className="text-lg font-bold text-oasis-text">{loadingLabel}</p>
+              <p className="text-xs text-oasis-muted mt-1.5">{loadingNote}</p>
             </div>
 
-            {/* Progress bar */}
             <div className="w-56 h-1.5 rounded-full bg-oasis-border overflow-hidden">
               <motion.div
+                key={state}
                 className="h-full rounded-full bg-gradient-to-r from-oasis-green-dim to-oasis-green"
                 initial={{ width: "0%" }}
                 animate={{ width: "100%" }}
-                transition={{
-                  duration: state === "analyzing-photo" ? 3 : 1.5,
-                  ease: "easeInOut",
-                }}
+                transition={{ duration: loadingDuration, ease: "easeInOut" }}
               />
             </div>
 
@@ -212,31 +244,11 @@ export default function ScanPage() {
             </motion.div>
             <h2 className="font-semibold text-[18px] text-oasis-text">Product Not Found</h2>
             <p className="text-sm text-oasis-muted text-center leading-relaxed max-w-xs">
-              Barcode <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> isn&apos;t in our database yet. Photograph the label and our AI will analyze it.
+              {scannedBarcode && (
+                <>Barcode <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> isn&apos;t in our database. </>
+              )}
+              Photograph the ingredient label and our AI will score it instantly.
             </p>
-            {/* Manual entry */}
-            <div className="w-full max-w-xs mt-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Enter barcode..."
-                  value={manualBarcode}
-                  onChange={(e) => setManualBarcode(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && manualBarcode && handleScan(manualBarcode)}
-                  className="flex-1 px-3 py-2.5 rounded-xl bg-oasis-card border border-oasis-border text-sm text-oasis-text placeholder:text-oasis-muted focus:outline-none focus:border-oasis-green/40"
-                />
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => manualBarcode && handleScan(manualBarcode)}
-                  disabled={!manualBarcode}
-                  className="px-4 py-2.5 rounded-xl bg-oasis-green/20 border border-oasis-green/30 text-oasis-green text-sm font-semibold disabled:opacity-50"
-                >
-                  Go
-                </motion.button>
-              </div>
-            </div>
 
             <div className="flex gap-3 mt-2">
               <motion.button
