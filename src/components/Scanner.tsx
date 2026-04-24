@@ -17,6 +17,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrRef = useRef<unknown>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasScannedRef = useRef(false);
 
   const stopScanner = useCallback(async () => {
     if (html5QrRef.current) {
@@ -38,6 +39,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
     if (!scanning) return;
 
     let mounted = true;
+    hasScannedRef.current = false;
 
     const startScanner = async () => {
       try {
@@ -50,11 +52,12 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
         await scanner.start(
           { facingMode: "environment" },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 120 },
-            aspectRatio: 1.0,
+            fps: 15,
+            qrbox: { width: Math.round(Math.min(window.innerWidth, 400) * 0.7), height: Math.round(Math.min(window.innerWidth, 400) * 0.28) },
           },
           (decodedText) => {
+            if (hasScannedRef.current) return;
+            hasScannedRef.current = true;
             onScan(decodedText);
             setScanning(false);
           },

@@ -119,6 +119,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         analysis: analysis as unknown as Record<string, unknown>,
       };
 
+      // Remap healthier_tip → healthier_alternative so product page renders it
+      const storedAnalysis = {
+        ...analysis,
+        healthier_alternative: (analysis as unknown as Record<string, string>).healthier_tip,
+      };
+      productData.analysis = storedAnalysis as unknown as Record<string, unknown>;
+
       const { data: upserted } = await supabase
         .from("products")
         // @ts-expect-error Supabase generic typing mismatch
