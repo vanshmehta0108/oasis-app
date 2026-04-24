@@ -279,29 +279,21 @@ export default function ProfilePage() {
             <h3 className="text-sm font-semibold text-black">Language</h3>
           </div>
           <div className="flex gap-0 p-1 rounded-xl bg-white border border-[#E5E5EA]">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setLanguage("English")}
-              className="flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all"
-              style={language === "English"
-                ? { background: "#007AFF", color: "#FFFFFF" }
-                : { color: "#8E8E93" }
-              }
-            >
-              🇬🇧 English
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => showToast("हिंदी support is coming soon", "info")}
-              aria-label="Hindi (coming soon)"
-              className="flex-1 relative px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-not-allowed"
-              style={{ color: "#8E8E93", opacity: 0.55 }}
-            >
-              🇮🇳 हिंदी
-              <span className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#007AFF] text-white uppercase tracking-wider">
-                Soon
-              </span>
-            </motion.button>
+            {(["English", "Hindi"] as const).map((lang) => (
+              <motion.button
+                key={lang}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setLanguage(lang)}
+                aria-pressed={language === lang}
+                className="flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all"
+                style={language === lang
+                  ? { background: "#007AFF", color: "#FFFFFF" }
+                  : { color: "#8E8E93" }
+                }
+              >
+                {lang === "English" ? "🇬🇧 English" : "🇮🇳 हिंदी"}
+              </motion.button>
+            ))}
           </div>
         </motion.div>
 

@@ -6,6 +6,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PackageX, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import { Scanner } from "@/components/Scanner";
 import Link from "next/link";
+import { useUserData } from "@/lib/userData";
+
+// Map the app's stored language value to the API's lang param.
+function apiLang(language: "English" | "Hindi"): "en" | "hi" {
+  return language === "Hindi" ? "hi" : "en";
+}
 
 type ScanState = "scanning" | "looking-up" | "analyzing" | "not-found" | "analyzing-photo";
 
@@ -33,6 +39,8 @@ function mapIngredient(ing: { name: string; risk_level?: string; risk?: string; 
 
 export default function ScanPage() {
   const router = useRouter();
+  const { data: userData } = useUserData();
+  const lang = apiLang(userData.profile.language);
   const [state, setState] = useState<ScanState>("scanning");
   const [scannedBarcode, setScannedBarcode] = useState("");
   const [loadingLabel, setLoadingLabel] = useState("Looking Up Product...");
@@ -75,6 +83,7 @@ export default function ScanPage() {
               barcode,
               name: product.name,
               brand: product.brand,
+              lang,
             }),
           });
           if (aRes.ok) {
@@ -113,7 +122,7 @@ export default function ScanPage() {
     } catch {
       setState("not-found");
     }
-  }, [router]);
+  }, [router, lang]);
 
   const handlePhoto = async (base64: string) => {
     setState("analyzing-photo");
@@ -123,7 +132,7 @@ export default function ScanPage() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64 }),
+        body: JSON.stringify({ image: base64, lang }),
       });
       if (res.ok) {
         const data = await res.json();

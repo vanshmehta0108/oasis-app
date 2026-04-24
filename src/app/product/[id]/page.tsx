@@ -152,6 +152,10 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   } = useUserData();
 
   const inCompare = userData.compareList.some((c) => c.id === (product?.id ?? ""));
+  const lang: "en" | "hi" = userData.profile.language === "Hindi" ? "hi" : "en";
+  // Tracks the language the currently-displayed analysis was rendered in,
+  // so we don't re-translate on every render.
+  const [analysisLang, setAnalysisLang] = useState<"en" | "hi">("en");
 
   const score = product?.safety_score ?? 0;
   const grade = product?.grade ?? "?";
@@ -192,7 +196,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ingredients, category: category || "food", ...(barcode ? { barcode } : {}) }),
+      body: JSON.stringify({ ingredients, category: category || "food", lang, ...(barcode ? { barcode } : {}) }),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((result) => {
@@ -208,6 +212,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               }
             : prev,
         );
+        // If the server honored our lang request, the returned analysis is
+        // already in that language — track it so we don't re-translate.
+        if (result.lang) setAnalysisLang(result.lang === "hi" ? "hi" : "en");
       })
       .catch(console.error)
       .finally(() => {
@@ -245,6 +252,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           name: product?.name,
           brand: product?.brand,
           category: product?.category || "food",
+          lang,
         }),
       })
         .then((res) => (res.ok ? res.json() : null))
@@ -290,6 +298,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     setNotFoundState(false);
     setAnalyzing(false);
     setLabelScanning(false);
+    // Everything we load from master/DB/sessionStorage is in English.
+    // The translate-on-demand effect below will swap it if needed.
+    setAnalysisLang("en");
 
     // Helper: parse sessionStorage JSON without crashing the page if the
     // value was written by an older version with a different shape
@@ -484,7 +495,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // Personalized warnings — runs after analysis is present and only if the
   // user has set up conditions/allergies in their profile. Per-request
   // (not cached in DB) since it's user-specific.
-  const profileKey = JSON.stringify([userData.profile.conditions, userData.profile.allergies]);
+  const profileKey = JSON.stringify([userData.profile.conditions, userData.profile.allergies, userData.profile.language]);
   useEffect(() => {
     if (!product?.analysis?.ingredients?.length) return;
     const profile = userData.profile;
@@ -519,6 +530,50 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.analysis?.summary, profileKey]);
+
+  // Translate cached analysis on the fly when the user's language is set
+  // to Hindi but the currently-displayed analysis is English. Runs once
+  // per (analysis, lang) pair — skips if already in the target language.
+  useEffect(() => {
+    if (!product?.analysis) return;
+    if (lang === analysisLang) return;
+    if (lang !== "hi") return; // only Hindi is supported right now
+
+    const controller = new AbortController();
+    const gen = loaderGen.current;
+    fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        analysis: {
+          score: product.safety_score ?? 0,
+          grade: product.grade ?? "C",
+          summary: product.analysis.summary,
+          ingredients: product.analysis.ingredients.map((i) => ({
+            name: i.name,
+            risk_level: i.risk,
+            explanation: i.explanation,
+          })),
+          warnings: product.analysis.warnings,
+          healthier_alternative: product.analysis.healthier_alternative,
+        },
+        targetLang: "hi",
+      }),
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (gen !== loaderGen.current) return;
+        if (!data?.analysis) return;
+        setProduct((prev) =>
+          prev ? { ...prev, analysis: mapAnalysisJson(data.analysis) } : prev,
+        );
+        setAnalysisLang("hi");
+      })
+      .catch(() => { /* translation is additive — fall back to English silently */ });
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.analysis?.summary, lang]);
 
   // Auto-lookup FSSAI when not in DB
   useEffect(() => {

@@ -9,6 +9,7 @@ import { UserDataProvider } from "@/lib/userData";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { SetupBanner } from "@/components/SetupBanner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
@@ -88,6 +89,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className="min-h-dvh bg-sift-bg text-sift-label antialiased">
         <ServiceWorkerRegistration />
+        <ErrorBoundary>
         <AuthProvider>
         <UserDataProvider>
         <ToastProvider>
@@ -107,6 +109,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </ToastProvider>
         </UserDataProvider>
         </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );
