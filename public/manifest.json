@@ -1,11 +1,11 @@
 {
-  "name": "Oasis — Know What's In Your Food",
-  "short_name": "Oasis",
+  "name": "Sift — Know What's In Your Food",
+  "short_name": "Sift",
   "description": "India's AI-powered product safety scanner. Scan any barcode for instant safety scores.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0f0d",
-  "theme_color": "#0a0f0d",
+  "background_color": "#F2F2F7",
+  "theme_color": "#007AFF",
   "orientation": "portrait",
   "scope": "/",
   "categories": ["health", "food", "lifestyle"],
@@ -15,6 +15,36 @@
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "image",
+          "accept": ["image/jpeg", "image/png", "image/webp", "image/heic", "image/*"]
+        }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Scan a product",
+      "short_name": "Scan",
+      "url": "/scan",
+      "description": "Open the camera and scan a barcode or ingredient label"
+    },
+    {
+      "name": "Search products",
+      "short_name": "Search",
+      "url": "/search",
+      "description": "Find a product by name or brand"
     }
   ]
 }
