@@ -38,6 +38,7 @@ function AddProductForm() {
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [submittedOk, setSubmittedOk] = useState(false);
   const [extracting, setExtracting] = useState(false);
 
   const addIngredient = () => {
@@ -149,20 +150,9 @@ function AddProductForm() {
       });
 
       if (res.ok) {
-        const { product } = await res.json();
-
-        // Trigger analysis in the background
-        fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            barcode: product.barcode,
-            ingredients,
-            category,
-          }),
-        }).catch(() => {});
-
-        router.push(`/product/${product.id}`);
+        // Submission entered moderation queue — it's not a live product yet,
+        // so there's nothing to navigate to. Show a confirmation instead.
+        setSubmittedOk(true);
       } else {
         const data = await res.json();
         setError(data.error || "Failed to add product");
@@ -173,6 +163,35 @@ function AddProductForm() {
       setSubmitting(false);
     }
   };
+
+  if (submittedOk) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center px-6 text-center" style={{ background: "#F2F2F7" }}>
+        <div className="w-16 h-16 rounded-full bg-[#F0FBF4] flex items-center justify-center mb-4">
+          <span className="text-3xl">✓</span>
+        </div>
+        <h1 className="text-[20px] font-bold text-black mb-2">Submitted for review</h1>
+        <p className="text-sm max-w-sm mb-6" style={{ color: "#8E8E93" }}>
+          Thanks for contributing. A moderator will check the ingredient list and add it to the public catalog shortly.
+        </p>
+        <div className="flex gap-3">
+          <Link
+            href="/scan"
+            className="px-5 py-2.5 rounded-full text-white font-semibold text-sm"
+            style={{ background: "#007AFF" }}
+          >
+            Scan another
+          </Link>
+          <Link
+            href="/"
+            className="px-5 py-2.5 rounded-full text-sm font-medium border border-black/[0.12] bg-white text-black"
+          >
+            Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh gradient-mesh pb-24">

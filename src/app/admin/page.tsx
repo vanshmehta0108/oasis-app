@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { BarChart3, Package, Download, Plus, Trash2, Search, RefreshCw, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { BarChart3, Package, Download, Plus, Trash2, Search, RefreshCw, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Check, X as XIcon } from "lucide-react";
 
-type Tab = "dashboard" | "products" | "import" | "add";
+type Tab = "dashboard" | "products" | "import" | "add" | "moderation";
+
+interface Submission {
+  id: string;
+  user_id: string;
+  product_name: string;
+  barcode: string;
+  extracted_ingredients: string[];
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
 
 interface Stats {
   total: number;
@@ -66,6 +76,12 @@ export default function AdminPage() {
   const [addBarcode, setAddBarcode] = useState("");
   const [addResult, setAddResult] = useState<string | null>(null);
 
+  // Moderation tab
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [subStatus, setSubStatus] = useState<"pending" | "approved" | "rejected">("pending");
+  const [loadingSubs, setLoadingSubs] = useState(false);
+  const [moderatingId, setModeratingId] = useState<string | null>(null);
+
   const addLog = (msg: string) => setLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
 
   const fetchStats = useCallback(async (adminKey: string) => {
@@ -94,6 +110,46 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === "products" && authenticated) fetchProducts(1, productSearch);
   }, [tab, authenticated, fetchProducts, productSearch]);
+
+  const fetchSubmissions = useCallback(async (status: "pending" | "approved" | "rejected") => {
+    setLoadingSubs(true);
+    try {
+      const res = await fetch(`/api/admin/moderation?key=${key}&status=${status}`);
+      if (!res.ok) throw new Error("failed");
+      const data = await res.json();
+      setSubmissions(data.submissions || []);
+    } catch {
+      addLog("Failed to fetch submissions");
+      setSubmissions([]);
+    }
+    setLoadingSubs(false);
+  }, [key]);
+
+  useEffect(() => {
+    if (tab === "moderation" && authenticated) fetchSubmissions(subStatus);
+  }, [tab, authenticated, subStatus, fetchSubmissions]);
+
+  const moderate = async (id: string, action: "approve" | "reject") => {
+    setModeratingId(id);
+    try {
+      const res = await fetch(`/api/admin/moderation?key=${key}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        addLog(`${action} failed: ${data.error || res.status}`);
+      } else {
+        const data = await res.json();
+        addLog(`${action} OK${data.scored ? " (AI-scored)" : ""}: ${id.slice(0, 8)}`);
+        setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      }
+    } catch {
+      addLog(`${action} failed: network error`);
+    }
+    setModeratingId(null);
+  };
 
   const handleAuth = async () => {
     const res = await fetch(`/api/admin/stats?key=${key}`);
@@ -215,6 +271,7 @@ export default function AdminPage() {
 
   const tabs = [
     { id: "dashboard" as Tab, label: "Dashboard", Icon: BarChart3 },
+    { id: "moderation" as Tab, label: "Moderation", Icon: ShieldCheck },
     { id: "products" as Tab, label: "Products", Icon: Package },
     { id: "import" as Tab, label: "Import", Icon: Download },
     { id: "add" as Tab, label: "Add Product", Icon: Plus },
@@ -515,6 +572,109 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {tab === "moderation" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              {(["pending", "approved", "rejected"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSubStatus(s)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  style={
+                    subStatus === s
+                      ? { background: "#0A84FF", color: "white" }
+                      : { background: "#2C2C2E", color: "#8E8E93" }
+                  }
+                >
+                  {s}
+                </button>
+              ))}
+              <button
+                onClick={() => fetchSubmissions(subStatus)}
+                className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
+                style={{ background: "#2C2C2E", color: "#8E8E93" }}
+              >
+                <RefreshCw size={12} />
+                Refresh
+              </button>
+            </div>
+
+            {loadingSubs ? (
+              <p className="text-sm" style={{ color: "#8E8E93" }}>Loading…</p>
+            ) : submissions.length === 0 ? (
+              <div className="p-6 rounded-xl text-center text-sm" style={{ background: "#1C1C1E", color: "#8E8E93" }}>
+                No {subStatus} submissions.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {submissions.map((sub) => {
+                  const busy = moderatingId === sub.id;
+                  return (
+                    <div
+                      key={sub.id}
+                      className="p-4 rounded-xl"
+                      style={{ background: "#1C1C1E", border: "1px solid #2C2C2E" }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-white truncate">{sub.product_name}</p>
+                          <p className="text-[11px] font-mono mt-0.5" style={{ color: "#636366" }}>
+                            {sub.barcode || "no barcode"} · by {sub.user_id.slice(0, 8)} · {new Date(sub.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        {subStatus === "pending" && (
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => moderate(sub.id, "approve")}
+                              disabled={busy}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                              style={{ background: "#1E8040", color: "white" }}
+                            >
+                              <Check size={12} />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => moderate(sub.id, "reject")}
+                              disabled={busy}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                              style={{ background: "#7A1A1A", color: "white" }}
+                            >
+                              <XIcon size={12} />
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {sub.extracted_ingredients?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {sub.extracted_ingredients.slice(0, 20).map((ing, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 rounded-full text-[11px]"
+                              style={{ background: "#2C2C2E", color: "#C7C7CC" }}
+                            >
+                              {ing}
+                            </span>
+                          ))}
+                          {sub.extracted_ingredients.length > 20 && (
+                            <span className="text-[11px]" style={{ color: "#636366" }}>
+                              +{sub.extracted_ingredients.length - 20} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <p className="text-[10px]" style={{ color: "#636366" }}>
+              Approving runs AI analysis and adds the row to the public products catalog.
+            </p>
           </div>
         )}
       </div>

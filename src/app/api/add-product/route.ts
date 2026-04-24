@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { upsertProduct } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { log } from "@/lib/log";
-import type { ScoreGrade } from "@/lib/database.types";
 
 const AddProductRequest = z.object({
   name: z.string().min(1, "Product name is required"),
@@ -11,23 +10,7 @@ const AddProductRequest = z.object({
   category: z.string().default("food"),
   ingredients: z.array(z.string()).default([]),
   barcode: z.string().optional(),
-  image_url: z.string().optional(),
-  analysis: z
-    .object({
-      score: z.number(),
-      grade: z.string(),
-      summary: z.string(),
-      ingredients: z.array(
-        z.object({
-          name: z.string(),
-          risk_level: z.string(),
-          explanation: z.string(),
-        })
-      ),
-      warnings: z.array(z.string()),
-      healthier_tip: z.string().optional(),
-    })
-    .optional(),
+  user_id: z.string().optional(),
 });
 
 function corsHeaders(): HeadersInit {
@@ -44,13 +27,15 @@ export async function OPTIONS(): Promise<NextResponse> {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  // 5 submissions per hour per IP — prevents drive-by spam while allowing
-  // a real contributor to add a few products in a row.
   const rl = checkRateLimit(`add-product:${ip}`, { capacity: 5, refillPerMin: 5 / 60 });
   if (!rl.ok) {
     log.warn("add_product.rate_limited", { ip, retryAfter: rl.retryAfter });
     return NextResponse.json(
-      { error: "Too many submissions", details: `Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.`, retryAfter: rl.retryAfter },
+      {
+        error: "Too many submissions",
+        details: `Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.`,
+        retryAfter: rl.retryAfter,
+      },
       { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
     );
   }
@@ -60,65 +45,59 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const parsed = AddProductRequest.safeParse(body);
 
     if (!parsed.success) {
-      const firstIssue = parsed.error.issues[0];
       return NextResponse.json(
-        { error: "Invalid request", details: firstIssue?.message },
-        { status: 400, headers: corsHeaders() }
+        { error: "Invalid request", details: parsed.error.issues[0]?.message },
+        { status: 400, headers: corsHeaders() },
       );
     }
 
-    const { name, brand, category, ingredients, barcode, image_url, analysis } =
-      parsed.data;
+    const { name, brand, category, ingredients, barcode, user_id } = parsed.data;
 
-    // Generate a barcode if none provided (use timestamp + random)
-    const finalBarcode =
-      barcode || `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // Community submission → goes to the moderation queue, not live products.
+    // Admins review via /admin's pending tab and approve into `products`.
+    const submissionBarcode = barcode || `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const validCategories = [
-      "food",
-      "beverage",
-      "snack",
-      "dairy",
-      "baby_food",
-      "skincare",
-      "haircare",
-      "cosmetic",
-      "household",
-      "water",
-    ];
-    const mappedCategory = validCategories.includes(category) ? category : "food";
+    const { data: submission, error } = await supabase
+      .from("community_submissions")
+      // @ts-expect-error generated types don't include the extra product fields
+      .insert({
+        user_id: user_id || "anonymous",
+        product_name: name,
+        barcode: submissionBarcode,
+        // No photo for text-form submissions; empty string is stored.
+        label_image_url: "",
+        extracted_ingredients: ingredients,
+        status: "pending" as const,
+        // Extra context the moderator will want on review
+        brand,
+        category,
+      })
+      .select()
+      .single();
 
-    const product = await upsertProduct({
-      barcode: finalBarcode,
-      name,
-      brand,
-      category: mappedCategory as "food",
-      ingredients,
-      image_url: image_url || null,
-      ...(analysis
-        ? {
-            safety_score: analysis.score,
-            score_grade: analysis.grade as ScoreGrade,
-            analysis: {
-              ...analysis,
-              healthier_alternative: analysis.healthier_tip,
-            },
-          }
-        : {}),
-    });
+    if (error) {
+      log.error("add_product.db_fail", { ip, err: error.message });
+      return NextResponse.json(
+        { error: "Failed to save submission", details: error.message },
+        { status: 500, headers: corsHeaders() },
+      );
+    }
 
-    log.info("add_product.ok", { ip, barcode: finalBarcode, isManual: finalBarcode.startsWith("manual-"), category: mappedCategory });
+    log.info("add_product.submitted", { ip, barcode: submissionBarcode, category });
     return NextResponse.json(
-      { product },
-      { status: 201, headers: corsHeaders() }
+      {
+        submission,
+        pending: true,
+        message: "Submitted for review. We'll add it to the catalog after a moderator verifies the ingredients.",
+      },
+      { status: 201, headers: corsHeaders() },
     );
   } catch (error) {
     log.error("add_product.fail", { ip, err: error instanceof Error ? error.message : String(error) });
-    const message =
-      error instanceof Error ? error.message : "Failed to add product";
+    const message = error instanceof Error ? error.message : "Failed to add product";
     return NextResponse.json(
       { error: message },
-      { status: 500, headers: corsHeaders() }
+      { status: 500, headers: corsHeaders() },
     );
   }
 }
