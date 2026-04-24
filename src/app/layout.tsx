@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ToastProvider } from "@/lib/useToast";
@@ -95,7 +96,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <OfflineBanner />
           <ToastContainer />
           <main id="main-content" className="pb-20">{children}</main>
-          <BottomNav />
+          <Suspense fallback={null}><BottomNav /></Suspense>
           <SpeedInsights />
           <Analytics />
         </ToastProvider>
