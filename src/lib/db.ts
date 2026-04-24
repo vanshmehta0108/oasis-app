@@ -70,10 +70,14 @@ export async function searchProducts(
   category?: string,
   limit = 20
 ): Promise<Product[]> {
+  // Escape PostgREST .or() filter metacharacters. Commas split clauses,
+  // parentheses group them, and backslashes escape — all must be sanitized
+  // so special characters in product names don't break the query.
+  const safe = query.replace(/[,()\\]/g, " ").replace(/\s+/g, " ").trim();
   let q = supabase
     .from("products")
     .select("*")
-    .or(`name.ilike.%${query}%,brand.ilike.%${query}%,barcode.eq.${query}`)
+    .or(`name.ilike.%${safe}%,brand.ilike.%${safe}%,barcode.eq.${safe}`)
     .limit(limit);
 
   if (category && category !== "All") {

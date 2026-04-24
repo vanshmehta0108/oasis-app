@@ -90,7 +90,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let labelData = null;
 
     if (image) {
-      labelData = await analyzeLabel(image);
+      try {
+        labelData = await analyzeLabel(image);
+      } catch (err) {
+        console.error("Label extraction failed:", err);
+        return errorResponse(
+          "Couldn't read the label",
+          422,
+          "The image was too blurry or dark to extract ingredients. Try better lighting or a closer shot."
+        );
+      }
       finalIngredients = labelData.ingredients;
     }
 
@@ -98,11 +107,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return errorResponse(
         "No ingredients found",
         400,
-        "Provide an ingredients list or a clearer label image."
+        image
+          ? "Couldn't find an ingredient list on this label. Try framing the INGREDIENTS section directly."
+          : "Provide an ingredients list or a clearer label image."
       );
     }
 
-    const analysis = await analyzeIngredients(finalIngredients, category, labelData?.fssai_license ?? null);
+    let analysis;
+    try {
+      analysis = await analyzeIngredients(finalIngredients, category, labelData?.fssai_license ?? null);
+    } catch (err) {
+      console.error("Ingredient analysis failed:", err);
+      const message = err instanceof Error ? err.message : "Analysis failed";
+      // Surface rate-limit / quota errors clearly so the client can retry
+      const isRateLimit = /rate|quota|429|resource_exhausted/i.test(message);
+      return errorResponse(
+        isRateLimit ? "Analysis temporarily unavailable" : "Analysis failed",
+        isRateLimit ? 429 : 500,
+        isRateLimit ? "Our AI is rate-limited right now. Please retry in a minute." : message
+      );
+    }
 
     // Store result if we have a barcode
     if (barcode) {

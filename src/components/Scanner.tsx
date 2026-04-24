@@ -38,13 +38,13 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   useEffect(() => {
     if (!scanning) return;
 
-    let mounted = true;
+    const mountedRef = { current: true };
     hasScannedRef.current = false;
 
     const startScanner = async () => {
       try {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
-        if (!mounted || !scannerRef.current) return;
+        if (!mountedRef.current || !scannerRef.current) return;
         if (html5QrRef.current) return;
 
         const scanner = new Html5Qrcode("oasis-scanner", {
@@ -72,7 +72,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
             aspectRatio: window.innerHeight / window.innerWidth,
           },
           (decodedText) => {
-            if (hasScannedRef.current) return;
+            // Guard against late callbacks after unmount or after a prior scan in this session
+            if (!mountedRef.current || hasScannedRef.current) return;
             hasScannedRef.current = true;
             if (navigator.vibrate) navigator.vibrate(60);
             onScan(decodedText);
@@ -83,7 +84,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
           }
         );
       } catch (err) {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
         if (err instanceof Error && err.message.toLowerCase().includes("permission")) {
           setError("Camera access denied. Please allow camera permission in your browser settings.");
         } else {
@@ -94,7 +95,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
 
     startScanner();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       stopScanner();
     };
   }, [scanning, onScan, stopScanner]);

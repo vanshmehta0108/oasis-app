@@ -21,6 +21,19 @@ export interface MappedOFFProduct {
 
 const OFF_BASE = "https://world.openfoodfacts.org/api/v2/product";
 
+// Map Open Food Facts category slugs to the app's 6 display categories.
+// OFF returns strings like "en:breakfast-cereals,en:snacks,en:sweet-snacks".
+function mapOFFCategory(raw: string | undefined): string {
+  if (!raw) return "Food";
+  const lowered = raw.toLowerCase();
+  if (/beverag|drink|juice|water|soda|tea|coffee|milk/.test(lowered)) return "Beverages";
+  if (/snack|cereal|chocolate|confectioner|biscuit|crisps|chips|namkeen|mithai/.test(lowered)) return "Snacks";
+  if (/baby|infant|toddler/.test(lowered)) return "Baby";
+  if (/cosmetic|skincare|skin-care|beauty|lotion|cream|soap|shampoo/.test(lowered)) return "Skincare";
+  if (/household|cleaning|detergent/.test(lowered)) return "Household";
+  return "Food";
+}
+
 export async function fetchProductByBarcode(
   barcode: string
 ): Promise<MappedOFFProduct | null> {
@@ -53,7 +66,7 @@ export async function fetchProductByBarcode(
       barcode: p.code || barcode,
       name: p.product_name,
       brand: p.brands || "Unknown",
-      category: p.categories?.split(",")[0]?.trim() || "Food",
+      category: mapOFFCategory(p.categories),
       ingredients,
       image_url: p.image_url || "",
     };
@@ -89,7 +102,7 @@ export async function searchOFFProducts(
           barcode: p.code || "",
           name: p.product_name,
           brand: p.brands || "Unknown",
-          category: p.categories?.split(",")[0]?.trim() || "Food",
+          category: mapOFFCategory(p.categories),
           ingredients,
           image_url: p.image_url || "",
         };

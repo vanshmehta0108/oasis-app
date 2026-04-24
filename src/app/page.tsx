@@ -116,12 +116,18 @@ export default function Home() {
     if (!onboarded) setShowOnboarding(true);
     setScanCount(getScanCount());
     setCheckingOnboarding(false);
-    getTrendingProducts(6).then((d) => setTrending(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))));
-    getWorstRated(4).then((d) => setWorst(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))));
-    getRecentProducts(4).then((d) => setRecentlyAdded(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))));
-    getProductCount().then(setProductCount);
-    getFlaggedCount().then(setFlaggedCount);
-    getCategoryCounts().then(setCatCounts);
+    getTrendingProducts(6)
+      .then((d) => setTrending(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
+      .catch((e) => console.error("Failed to load trending:", e));
+    getWorstRated(4)
+      .then((d) => setWorst(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
+      .catch((e) => console.error("Failed to load worst-rated:", e));
+    getRecentProducts(4)
+      .then((d) => setRecentlyAdded(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
+      .catch((e) => console.error("Failed to load recent:", e));
+    getProductCount().then(setProductCount).catch(() => setProductCount(0));
+    getFlaggedCount().then(setFlaggedCount).catch(() => setFlaggedCount(0));
+    getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
   }, []);
 
   if (checkingOnboarding) return null;

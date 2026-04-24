@@ -8,13 +8,30 @@ export interface ScanRecord {
   timestamp: number;
 }
 
+const HISTORY_KEY = "oasis-scan-history";
+const COUNT_KEY = "oasis-scan-count";
+
+function safeParseHistory(): ScanRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // Corrupt storage — reset so we don't crash every page that reads it
+    try { localStorage.removeItem(HISTORY_KEY); } catch {}
+    return [];
+  }
+}
+
 export function recordScan(product: { id: string; name: string; brand: string; safety_score?: number | null; grade?: string | null; category?: string }) {
-  const history: ScanRecord[] = JSON.parse(localStorage.getItem("oasis-scan-history") || "[]");
+  if (typeof window === "undefined") return;
+  const history = safeParseHistory();
 
   // Deduplicate — remove existing entry for same product
   const filtered = history.filter(h => h.id !== product.id);
 
-  // Add to front
   filtered.unshift({
     id: product.id,
     name: product.name,
@@ -25,19 +42,29 @@ export function recordScan(product: { id: string; name: string; brand: string; s
     timestamp: Date.now(),
   });
 
-  // Keep last 50
   const trimmed = filtered.slice(0, 50);
-  localStorage.setItem("oasis-scan-history", JSON.stringify(trimmed));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+  } catch {
+    // Quota exceeded or storage disabled — drop silently rather than crash the caller
+  }
 
-  // Increment scan count
-  const count = parseInt(localStorage.getItem("oasis-scan-count") || "0", 10);
-  localStorage.setItem("oasis-scan-count", String(count + 1));
+  try {
+    const count = parseInt(localStorage.getItem(COUNT_KEY) || "0", 10);
+    localStorage.setItem(COUNT_KEY, String((Number.isFinite(count) ? count : 0) + 1));
+  } catch {}
 }
 
 export function getScanHistory(): ScanRecord[] {
-  return JSON.parse(localStorage.getItem("oasis-scan-history") || "[]");
+  return safeParseHistory();
 }
 
 export function getScanCount(): number {
-  return parseInt(localStorage.getItem("oasis-scan-count") || "0", 10);
+  if (typeof window === "undefined") return 0;
+  try {
+    const n = parseInt(localStorage.getItem(COUNT_KEY) || "0", 10);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
 }

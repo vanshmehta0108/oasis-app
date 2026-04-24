@@ -13,6 +13,17 @@ import { SkeletonSearchResults } from "@/components/Skeleton";
 
 const popularSearches = ["Maggi", "Bournvita", "Kurkure", "Sunscreen", "Baby food", "Atta"];
 
+function mapOFFCategory(raw: string | undefined): string {
+  if (!raw) return "Food";
+  const lowered = raw.toLowerCase();
+  if (/beverag|drink|juice|water|soda|tea|coffee|milk/.test(lowered)) return "Beverages";
+  if (/snack|cereal|chocolate|confectioner|biscuit|crisps|chips|namkeen|mithai/.test(lowered)) return "Snacks";
+  if (/baby|infant|toddler/.test(lowered)) return "Baby";
+  if (/cosmetic|skincare|skin-care|beauty|lotion|cream|soap|shampoo/.test(lowered)) return "Skincare";
+  if (/household|cleaning|detergent/.test(lowered)) return "Household";
+  return "Food";
+}
+
 const stagger = {
   hidden: {},
   show: { transition: { staggerChildren: 0.05 } },
@@ -73,18 +84,33 @@ function SearchContent() {
   const handleSearch = useCallback((q: string) => setQuery(q), []);
   const handleCategory = useCallback((c: string) => setCategory(c), []);
 
-  // Category browse — load all products in category when no search query
+  // Category browse — load all products in category when no search query.
+  // Generation counter guards against stale responses when the user switches
+  // categories faster than the DB responds.
+  const browseGen = useRef(0);
   useEffect(() => {
     if (query.length >= 2 || category === "All") return;
+    browseGen.current += 1;
+    const gen = browseGen.current;
     setDbLoading(true);
     setOffResults([]);
     getProductsByCategory(category)
-      .then((rows) => setDbResults(rows.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>))))
-      .catch(() => setDbResults([]))
-      .finally(() => setDbLoading(false));
+      .then((rows) => {
+        if (gen !== browseGen.current) return; // stale
+        setDbResults(rows.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
+      })
+      .catch(() => {
+        if (gen !== browseGen.current) return;
+        setDbResults([]);
+      })
+      .finally(() => {
+        if (gen !== browseGen.current) return;
+        setDbLoading(false);
+      });
   }, [category, query]);
 
   // Search Supabase + Open Food Facts with debounce
+  const searchGen = useRef(0);
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query || query.length < 2) {
@@ -94,6 +120,9 @@ function SearchContent() {
       }
       return;
     }
+    searchGen.current += 1;
+    const gen = searchGen.current;
+    const controller = new AbortController();
     debounceRef.current = setTimeout(async () => {
       setDbLoading(true);
       setOffLoading(true);
@@ -101,19 +130,22 @@ function SearchContent() {
       // Search Supabase (our DB)
       try {
         const supaResults = await searchSupabase(query, category === "All" ? undefined : category);
+        if (gen !== searchGen.current) return;
         setDbResults(supaResults.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
       } catch {
+        if (gen !== searchGen.current) return;
         setDbResults([]);
       } finally {
-        setDbLoading(false);
+        if (gen === searchGen.current) setDbLoading(false);
       }
 
       // Search Open Food Facts
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags=en:india&json=1&page_size=10&fields=code,product_name,brands,categories,ingredients_text,image_url`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
+          if (gen !== searchGen.current) return;
           const mapped: OFFResult[] = (data.products || [])
             .filter((p: { product_name?: string }) => p.product_name)
             .map((p: { code: string; product_name: string; brands?: string; categories?: string; ingredients_text?: string; image_url?: string }): OFFResult => ({
@@ -121,7 +153,7 @@ function SearchContent() {
               barcode: p.code,
               name: p.product_name,
               brand: p.brands || "Unknown",
-              category: p.categories?.split(",")[0]?.trim() || "Food",
+              category: mapOFFCategory(p.categories),
               ingredients: p.ingredients_text ? p.ingredients_text.split(/,\s*/).filter(Boolean) : [],
               safety_score: 0,
               grade: "C" as const,
@@ -131,12 +163,15 @@ function SearchContent() {
           setOffResults(mapped);
         }
       } catch {
-        // ignore
+        // ignore abort/network errors — stale request is already discarded
       } finally {
-        setOffLoading(false);
+        if (gen === searchGen.current) setOffLoading(false);
       }
     }, 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      controller.abort();
+    };
   }, [query, category]);
 
   // Combine results — DB first, then OFF (excluding duplicates by barcode)
