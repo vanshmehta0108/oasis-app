@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, X, Scale, Plus } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
-import { getCompareList, removeFromCompare, clearCompare, type CompareItem, COMPARE_MAX } from "@/lib/compare";
+import { useUserData, LIMITS, type CompareItem } from "@/lib/userData";
 
 function gradient(score: number | null): string {
   if (score == null) return "linear-gradient(135deg, #F2F2F7, #E5E5EA)";
@@ -24,18 +23,8 @@ function verdict(score: number | null): string {
 }
 
 export default function ComparePage() {
-  const [items, setItems] = useState<CompareItem[]>([]);
-
-  useEffect(() => {
-    const refresh = () => setItems(getCompareList());
-    refresh();
-    window.addEventListener("sift-compare-changed", refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener("sift-compare-changed", refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, []);
+  const { data, ready, removeFromCompare, clearCompare } = useUserData();
+  const items = data.compareList;
 
   const best = items.reduce<CompareItem | null>((acc, cur) => {
     if (cur.safety_score == null) return acc;
@@ -66,7 +55,7 @@ export default function ComparePage() {
           {items.length > 0 && (
             <button
               onClick={() => {
-                if (confirm("Remove all products from comparison?")) clearCompare();
+                if (confirm("Remove all products from comparison?")) void clearCompare();
               }}
               className="text-xs font-medium text-oasis-muted"
             >
@@ -75,10 +64,14 @@ export default function ComparePage() {
           )}
         </div>
         <p className="text-xs text-oasis-muted mb-6">
-          Side-by-side safety comparison — up to {COMPARE_MAX} products.
+          Side-by-side safety comparison — up to {LIMITS.COMPARE_MAX} products.
         </p>
 
-        {items.length === 0 ? (
+        {!ready ? (
+          <div className="flex justify-center py-16">
+            <div className="w-10 h-10 rounded-full border-2 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
+          </div>
+        ) : items.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -133,7 +126,7 @@ export default function ComparePage() {
                   style={{ background: gradient(item.safety_score), opacity: 0.6 }}
                 />
                 <button
-                  onClick={() => removeFromCompare(item.id)}
+                  onClick={() => void removeFromCompare(item.id)}
                   aria-label={`Remove ${item.name} from compare`}
                   className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-white border border-black/[0.08]"
                 >
@@ -160,7 +153,7 @@ export default function ComparePage() {
               </motion.div>
             ))}
 
-            {items.length < COMPARE_MAX && (
+            {items.length < LIMITS.COMPARE_MAX && (
               <Link
                 href="/search"
                 className="flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-oasis-border text-sm font-medium text-oasis-muted"

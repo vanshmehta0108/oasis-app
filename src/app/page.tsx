@@ -12,8 +12,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
 import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
-import { getScanCount } from "@/lib/scanHistory";
-import { getCompareList } from "@/lib/compare";
+import { useUserData } from "@/lib/userData";
 import { useRef, useEffect, useState } from "react";
 
 const stagger = {
@@ -102,22 +101,18 @@ const categoryMap: Record<string, string> = {
 };
 
 export default function Home() {
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-  const [scanCount, setScanCount] = useState(0);
+  const { data: userData, ready: userReady, error: userError, markOnboarded } = useUserData();
   const [trending, setTrending] = useState<Product[]>([]);
   const [worst, setWorst] = useState<Product[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<Product[]>([]);
   const [productCount, setProductCount] = useState(0);
   const [flaggedCount, setFlaggedCount] = useState(0);
   const [catCounts, setCatCounts] = useState<Record<string, number>>({});
-  const [compareCount, setCompareCount] = useState(0);
+
+  const scanCount = userData.scanCount;
+  const compareCount = userData.compareList.length;
 
   useEffect(() => {
-    const onboarded = localStorage.getItem("oasis-onboarded");
-    if (!onboarded) setShowOnboarding(true);
-    setScanCount(getScanCount());
-    setCheckingOnboarding(false);
     getTrendingProducts(6)
       .then((d) => setTrending(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
       .catch((e) => console.error("Failed to load trending:", e));
@@ -130,23 +125,19 @@ export default function Home() {
     getProductCount().then(setProductCount).catch(() => setProductCount(0));
     getFlaggedCount().then(setFlaggedCount).catch(() => setFlaggedCount(0));
     getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
-    const refreshCompare = () => setCompareCount(getCompareList().length);
-    refreshCompare();
-    window.addEventListener("sift-compare-changed", refreshCompare);
-    window.addEventListener("storage", refreshCompare);
-    return () => {
-      window.removeEventListener("sift-compare-changed", refreshCompare);
-      window.removeEventListener("storage", refreshCompare);
-    };
   }, []);
 
-  if (checkingOnboarding) return null;
-  if (showOnboarding) {
+  // Wait for the user profile to load before deciding whether to show
+  // onboarding — otherwise returning visitors flash the onboarding UI.
+  if (!userReady) return null;
+  // Skip onboarding when cloud storage isn't ready (SetupBanner explains
+  // what's missing). Showing it would loop forever because markOnboarded
+  // is a no-op without an authenticated session.
+  if (!userData.onboarded && !userError) {
     return (
-      <Onboarding onComplete={() => {
-        localStorage.setItem("oasis-onboarded", "true");
+      <Onboarding onComplete={async () => {
+        await markOnboarded();
         window.dispatchEvent(new Event("sift-onboarded"));
-        setShowOnboarding(false);
       }} />
     );
   }

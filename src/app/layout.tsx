@@ -5,8 +5,10 @@ import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ToastProvider } from "@/lib/useToast";
 import { AuthProvider } from "@/lib/useUser";
+import { UserDataProvider } from "@/lib/userData";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { SetupBanner } from "@/components/SetupBanner";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
@@ -87,6 +89,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-dvh bg-sift-bg text-sift-label antialiased">
         <ServiceWorkerRegistration />
         <AuthProvider>
+        <UserDataProvider>
         <ToastProvider>
           <a
             href="#main-content"
@@ -94,6 +97,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           >
             Skip to main content
           </a>
+          <SetupBanner />
           <OfflineBanner />
           <ToastContainer />
           <main id="main-content" className="pb-20">{children}</main>
@@ -101,6 +105,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SpeedInsights />
           <Analytics />
         </ToastProvider>
+        </UserDataProvider>
         </AuthProvider>
       </body>
     </html>

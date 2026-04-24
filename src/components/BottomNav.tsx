@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Home, Camera, Search, User } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useUserData } from "@/lib/userData";
 
 const tabs = [
   { href: "/",        icon: Home,   label: "Home"    },
@@ -15,26 +15,15 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(false);
+  const { data: userData, ready, error } = useUserData();
 
-  useEffect(() => {
-    const check = () => {
-      const onboarded = !!localStorage.getItem("oasis-onboarded");
-      setVisible(onboarded && !pathname.startsWith("/scan"));
-    };
-    check();
-    // Onboarding completion fires this custom event so the nav appears
-    // immediately, without requiring a reload.
-    window.addEventListener("sift-onboarded", check);
-    // Cross-tab sync: if another tab completes onboarding, mirror it here.
-    window.addEventListener("storage", check);
-    return () => {
-      window.removeEventListener("sift-onboarded", check);
-      window.removeEventListener("storage", check);
-    };
-  }, [pathname]);
-
-  if (!visible) return null;
+  // Hide until the cloud state is known, hide during onboarding, hide on
+  // the scan screen so the fullscreen camera isn't obstructed. When the
+  // app is in setup-required mode (no auth configured) we still show the
+  // nav so the developer can navigate to /profile to see instructions.
+  if (!ready) return null;
+  if (!userData.onboarded && !error) return null;
+  if (pathname.startsWith("/scan")) return null;
 
   return (
     <div

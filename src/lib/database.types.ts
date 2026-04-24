@@ -90,6 +90,11 @@ export interface Database {
           language_preference: string;
           subscription_tier: SubscriptionTier;
           created_at: string;
+          onboarded: boolean;
+          scan_history: unknown;
+          scan_count: number;
+          recent_searches: string[];
+          compare_list: unknown;
         };
         Insert: {
           id?: string;
@@ -100,6 +105,11 @@ export interface Database {
           language_preference?: string;
           subscription_tier?: SubscriptionTier;
           created_at?: string;
+          onboarded?: boolean;
+          scan_history?: unknown;
+          scan_count?: number;
+          recent_searches?: string[];
+          compare_list?: unknown;
         };
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>;
       };

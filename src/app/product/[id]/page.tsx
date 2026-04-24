@@ -11,9 +11,7 @@ import { IngredientList } from "@/components/IngredientList";
 import type { IngredientAnalysis } from "@/lib/mockData";
 import { masterLookup } from "@/lib/master";
 import { getProductByBarcode as getDbProduct } from "@/lib/db";
-import { recordScan } from "@/lib/scanHistory";
-import { loadProfile, hasPersonalization } from "@/lib/profile";
-import { addToCompare, removeFromCompare, isInCompare, COMPARE_MAX } from "@/lib/compare";
+import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
 
 interface PersonalWarning {
   warning: string;
@@ -144,9 +142,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [fssaiLooking, setFssaiLooking] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
   const [personalLoading, setPersonalLoading] = useState(false);
-  const [inCompare, setInCompare] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
+  const {
+    data: userData,
+    recordScan,
+    addToCompare,
+    removeFromCompare,
+  } = useUserData();
+
+  const inCompare = userData.compareList.some((c) => c.id === (product?.id ?? ""));
 
   const score = product?.safety_score ?? 0;
   const grade = product?.grade ?? "?";
@@ -374,7 +379,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
         if (stored) {
           setProduct(mapRawToProduct(stored));
-          recordScan(stored as unknown as Parameters<typeof recordScan>[0]);
+          recordScan({
+            id: (stored.id as string) || productId,
+            name: (stored.name as string) || "Unknown Product",
+            brand: (stored.brand as string) || "Unknown",
+            category: (stored.category as string) || "Food",
+            safety_score: (stored.safety_score as number | null | undefined) ?? null,
+            grade: (stored.grade as string | null | undefined) ?? null,
+          });
           if (stored.needs_analysis && hasCleanIngredients((stored.ingredients as string[]) ?? [])) {
             runAnalysis(stored.ingredients as string[], stored.category as string, barcode);
           }
@@ -411,7 +423,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         const stored = safeParse<Record<string, unknown>>(sessionStorage.getItem(`web-product-${barcode}`));
         if (stored) {
           setProduct(mapRawToProduct({ ...stored, id: (stored.id as string) || productId }));
-          recordScan(stored as unknown as Parameters<typeof recordScan>[0]);
+          recordScan({
+            id: (stored.id as string) || productId,
+            name: (stored.name as string) || "Unknown Product",
+            brand: (stored.brand as string) || "Unknown",
+            category: (stored.category as string) || "Food",
+            safety_score: (stored.safety_score as number | null | undefined) ?? null,
+            grade: (stored.grade as string | null | undefined) ?? null,
+          });
           if (stored.needs_analysis && hasCleanIngredients((stored.ingredients as string[]) ?? [])) {
             runAnalysis(stored.ingredients as string[], stored.category as string, barcode);
           }
@@ -423,7 +442,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       const analyzed = safeParse<Record<string, unknown>>(sessionStorage.getItem(`analyzed-${productId}`));
       if (analyzed) {
         setProduct(mapRawToProduct(analyzed));
-        recordScan(analyzed as unknown as Parameters<typeof recordScan>[0]);
+        recordScan({
+          id: (analyzed.id as string) || productId,
+          name: (analyzed.name as string) || "Unknown Product",
+          brand: (analyzed.brand as string) || "Unknown",
+          category: (analyzed.category as string) || "Food",
+          safety_score: (analyzed.safety_score as number | null | undefined) ?? null,
+          grade: (analyzed.grade as string | null | undefined) ?? null,
+        });
         return;
       }
 
@@ -432,28 +458,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Sync compare state whenever product changes or the list mutates
-  useEffect(() => {
-    if (!product) return;
-    const refresh = () => setInCompare(isInCompare(product.id));
-    refresh();
-    window.addEventListener("sift-compare-changed", refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener("sift-compare-changed", refresh);
-      window.removeEventListener("storage", refresh);
-    };
-  }, [product]);
-
-  function toggleCompare() {
+  async function toggleCompare() {
     if (!product) return;
     if (inCompare) {
-      removeFromCompare(product.id);
-      setInCompare(false);
+      await removeFromCompare(product.id);
       showToast("Removed from compare", "info");
       return;
     }
-    const result = addToCompare({
+    const result = await addToCompare({
       id: product.id,
       name: product.name,
       brand: product.brand,
@@ -463,19 +475,19 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       summary: product.analysis?.summary,
     });
     if (result === "added") {
-      setInCompare(true);
       showToast("Added to compare", "success");
     } else if (result === "full") {
-      showToast(`Compare holds up to ${COMPARE_MAX} products — remove one first`, "error");
+      showToast(`Compare holds up to ${LIMITS.COMPARE_MAX} products — remove one first`, "error");
     }
   }
 
   // Personalized warnings — runs after analysis is present and only if the
   // user has set up conditions/allergies in their profile. Per-request
   // (not cached in DB) since it's user-specific.
+  const profileKey = JSON.stringify([userData.profile.conditions, userData.profile.allergies]);
   useEffect(() => {
     if (!product?.analysis?.ingredients?.length) return;
-    const profile = loadProfile();
+    const profile = userData.profile;
     if (!hasPersonalization(profile)) return;
 
     const controller = new AbortController();
@@ -506,7 +518,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       });
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.analysis?.summary]);
+  }, [product?.analysis?.summary, profileKey]);
 
   // Auto-lookup FSSAI when not in DB
   useEffect(() => {

@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle, LogOut } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useToast } from "@/lib/useToast";
-// Products now come from Supabase — no mock imports
-import { getScanHistory, getScanCount, type ScanRecord } from "@/lib/scanHistory";
-import { saveProfile as persistProfile, hydrateOnSignIn, loadProfile } from "@/lib/profile";
+import { useUserData } from "@/lib/userData";
 import { signInWithGoogle, signOut, displayNameFor } from "@/lib/auth";
 import { useUser } from "@/lib/useUser";
 
@@ -33,43 +31,16 @@ const fadeUp = {
 
 export default function ProfilePage() {
   const { user, isAnonymous, authAvailable } = useUser();
-  const [selectedConditions, setSelectedConditions] = useState<string[]>(() => loadProfile().conditions);
-  const [allergies, setAllergies] = useState<string[]>(() => loadProfile().allergies);
+  const { data: userData, ready, error, setProfile } = useUserData();
   const [allergyInput, setAllergyInput] = useState("");
-  const [language, setLanguage] = useState<string>(() => loadProfile().language);
-  const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
-  const [scanCount, setScanCount] = useState(0);
   const [signingIn, setSigningIn] = useState(false);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    setScanHistory(getScanHistory());
-    setScanCount(getScanCount());
-  }, []);
-
-  // Pull latest profile from cloud whenever the signed-in user changes.
-  // Merges local + cloud so a user signing in from a new device doesn't
-  // blow away the conditions/allergies they already set up locally.
-  useEffect(() => {
-    if (!user || isAnonymous) return;
-    let cancelled = false;
-    hydrateOnSignIn().then((merged) => {
-      if (cancelled) return;
-      setSelectedConditions(merged.conditions);
-      setAllergies(merged.allergies);
-      setLanguage(merged.language);
-    });
-    return () => { cancelled = true; };
-  }, [user, isAnonymous]);
-
-  // Save profile (local + cloud) whenever it changes.
-  useEffect(() => {
-    persistProfile({
-      conditions: selectedConditions,
-      allergies,
-      language: language === "Hindi" ? "Hindi" : "English",
-    });
-  }, [selectedConditions, allergies, language]);
+  const selectedConditions = userData.profile.conditions;
+  const allergies = userData.profile.allergies;
+  const language = userData.profile.language;
+  const scanHistory = userData.scanHistory;
+  const scanCount = userData.scanCount;
 
   async function handleSignIn() {
     setSigningIn(true);
@@ -78,31 +49,74 @@ export default function ProfilePage() {
       setSigningIn(false);
       showToast(error || "Sign-in failed — please try again", "error");
     }
-    // On success the browser redirects to Google; no need to reset state.
   }
 
   async function handleSignOut() {
-    if (!confirm("Sign out? Your profile will stay on this device but won't sync to other devices.")) return;
+    if (!confirm("Sign out? You'll lose access to your cross-device history on this browser until you sign back in.")) return;
     await signOut();
     showToast("Signed out", "info");
   }
 
   const toggleCondition = (c: string) => {
-    setSelectedConditions((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
-    );
+    const next = selectedConditions.includes(c)
+      ? selectedConditions.filter((x) => x !== c)
+      : [...selectedConditions, c];
+    void setProfile({ conditions: next });
   };
 
   const addAllergy = () => {
     const trimmed = allergyInput.trim();
-    if (trimmed && !allergies.includes(trimmed)) {
-      setAllergies((prev) => [...prev, trimmed]);
-      setAllergyInput("");
-    }
+    if (!trimmed || allergies.includes(trimmed)) return;
+    setAllergyInput("");
+    void setProfile({ allergies: [...allergies, trimmed] });
+  };
+
+  const removeAllergy = (a: string) => {
+    void setProfile({ allergies: allergies.filter((x) => x !== a) });
+  };
+
+  const setLanguage = (lang: "English" | "Hindi") => {
+    void setProfile({ language: lang });
   };
 
   const recentScans = scanHistory.slice(0, 5);
   const safeProducts = scanHistory.filter((p) => (p.score ?? 0) >= 70).length;
+
+  // Cloud mode required — show a clear setup-required state instead of a
+  // broken-looking page when anonymous auth isn't enabled yet.
+  if (ready && error === "setup_required") {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center px-6 text-center" style={{ background: "#F2F2F7" }}>
+        <div className="w-16 h-16 rounded-full bg-[#007AFF]/10 flex items-center justify-center mb-4">
+          <User size={28} className="text-[#007AFF]" />
+        </div>
+        <h1 className="text-[18px] font-bold text-black mb-2">Cloud setup required</h1>
+        <p className="text-sm max-w-sm" style={{ color: "#8E8E93" }}>
+          Anonymous sign-ins aren&apos;t enabled on this deployment yet. See <code>docs/auth-setup.md</code> — it takes 15 minutes.
+        </p>
+      </div>
+    );
+  }
+  if (ready && error === "migration_required") {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center px-6 text-center" style={{ background: "#F2F2F7" }}>
+        <div className="w-16 h-16 rounded-full bg-[#FF9F0A]/10 flex items-center justify-center mb-4">
+          <User size={28} className="text-[#B87800]" />
+        </div>
+        <h1 className="text-[18px] font-bold text-black mb-2">Database migration required</h1>
+        <p className="text-sm max-w-sm" style={{ color: "#8E8E93" }}>
+          Run <code>docs/cloud-migration.sql</code> in the Supabase SQL editor to enable cloud profile + scan history.
+        </p>
+      </div>
+    );
+  }
+  if (!ready) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center" style={{ background: "#F2F2F7" }}>
+        <div className="w-10 h-10 rounded-full border-2 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
@@ -227,7 +241,7 @@ export default function ProfilePage() {
               >
                 {a}
                 <button
-                  onClick={() => setAllergies((prev) => prev.filter((x) => x !== a))}
+                  onClick={() => removeAllergy(a)}
                   className="hover:bg-red-400/20 rounded-full p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                   aria-label={`Remove ${a} allergy`}
                 >

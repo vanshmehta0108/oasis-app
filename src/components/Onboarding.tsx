@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Plus, X } from "lucide-react";
+import { useUserData } from "@/lib/userData";
 
 const HEALTH_CONDITIONS = [
   { id: "diabetic",  label: "Diabetic",           emoji: "💉" },
@@ -38,28 +39,41 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
   );
 }
 
-export function Onboarding({ onComplete }: { onComplete: () => void }) {
+export function Onboarding({ onComplete }: { onComplete: () => void | Promise<void> }) {
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [conditions, setConditions] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [customAllergy, setCustomAllergy] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { setProfile } = useUserData();
   const totalSteps = 4;
 
   const goNext = useCallback(() => { setDirection(1); setStep((s) => Math.min(s + 1, totalSteps - 1)); }, []);
-  const finish = useCallback(() => {
+
+  const finish = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
     // Save labels (not IDs) so Profile page's healthConditions.name comparison works
     const conditionLabels = conditions.map(
       (id) => HEALTH_CONDITIONS.find((h) => h.id === id)?.label ?? id
     );
-    localStorage.setItem("oasis-profile", JSON.stringify({ conditions: conditionLabels, allergies }));
-    onComplete();
-  }, [conditions, allergies, onComplete]);
+    try {
+      await setProfile({ conditions: conditionLabels, allergies });
+    } catch {
+      // Proceed even if the write fails — onboarding shouldn't block the user.
+    }
+    await onComplete();
+  }, [conditions, allergies, onComplete, setProfile, saving]);
 
-  const skip = () => {
-    localStorage.setItem("oasis-profile", JSON.stringify({ conditions: [], allergies: [] }));
-    onComplete();
-  };
+  const skip = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await setProfile({ conditions: [], allergies: [] });
+    } catch {}
+    await onComplete();
+  }, [onComplete, setProfile, saving]);
 
   return (
     <div

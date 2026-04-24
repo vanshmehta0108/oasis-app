@@ -28,11 +28,17 @@ stable `user_id` without signing in.
 The app's callback route at `/auth/callback` already handles the
 redirect back.
 
-## 3. Row-level security policies
+## 3. Row-level security policies + user data schema
 
-Run this SQL once in Supabase → SQL Editor. These policies ensure
-each user only sees and writes their own profile + scans, while keeping
-the `products` table globally readable.
+Run [`docs/cloud-migration.sql`](./cloud-migration.sql) first — it adds
+the JSONB columns the app now uses to persist scan history, compare
+list, recent searches, and onboarded flag into `user_profiles`. Then
+run the RLS policies below.
+
+Without the migration, the app falls back to a "Database migration
+required" message on the Profile page and won't persist user data.
+
+### RLS policies
 
 ```sql
 -- user_profiles: each row belongs to exactly one user

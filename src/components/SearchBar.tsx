@@ -1,35 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Clock } from "lucide-react";
+import { useUserData } from "@/lib/userData";
 
 const filterCategories = ["All", "Food", "Snacks", "Beverages", "Skincare", "Baby"];
-const RECENT_KEY = "sift-recent-searches";
-const RECENT_MAX = 6;
-
-function loadRecent(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecent(term: string) {
-  if (typeof window === "undefined") return;
-  const trimmed = term.trim();
-  if (trimmed.length < 2) return;
-  try {
-    const current = loadRecent();
-    const deduped = [trimmed, ...current.filter((t) => t.toLowerCase() !== trimmed.toLowerCase())].slice(0, RECENT_MAX);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(deduped));
-  } catch {}
-}
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
@@ -38,27 +14,24 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: SearchBarProps) {
+  const { data, addRecentSearch } = useUserData();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout>(undefined);
 
-  useEffect(() => {
-    setRecentSearches(loadRecent());
-  }, []);
+  const recentSearches = data.recentSearches;
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       onSearch(query);
       if (query.trim().length >= 2) {
-        saveRecent(query);
-        setRecentSearches(loadRecent());
+        void addRecentSearch(query);
       }
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [query, onSearch]);
+  }, [query, onSearch, addRecentSearch]);
 
   const handleRecent = (term: string) => {
     setQuery(term);
@@ -71,8 +44,7 @@ export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: Sear
       clearTimeout(debounceRef.current);
       onSearch(query);
       if (query.trim().length >= 2) {
-        saveRecent(query);
-        setRecentSearches(loadRecent());
+        void addRecentSearch(query);
       }
       inputRef.current?.blur();
     }
