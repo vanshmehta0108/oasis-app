@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check, Flag, Sparkles, Package, Info, Bookmark, BookmarkCheck } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
@@ -10,7 +10,9 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { IngredientList } from "@/components/IngredientList";
 import type { IngredientAnalysis } from "@/lib/mockData";
 import { masterLookup } from "@/lib/master";
-import { getProductByBarcode as getDbProduct } from "@/lib/db";
+import { getProductByBarcode as getDbProduct, getTopRatedInCategory } from "@/lib/db";
+import { ProductCardHorizontal } from "@/components/ProductCard";
+import type { Product } from "@/lib/mockData";
 import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
 
 interface PersonalWarning {
@@ -32,6 +34,8 @@ interface ProductData {
   grade: string | null;
   image_url?: string;
   fssai_license?: string | null;
+  barcode?: string | null;
+  nutritional_info?: Record<string, unknown> | null;
   analysis?: {
     summary: string;
     ingredients: IngredientAnalysis[];
@@ -111,6 +115,8 @@ function mapRawToProduct(data: Record<string, unknown>): ProductData {
     grade: (data.grade as string) ?? (data.score_grade as string) ?? null,
     image_url: data.image_url as string | undefined,
     fssai_license: (data.fssai_license as string | null) ?? null,
+    barcode: (data.barcode as string | null) ?? null,
+    nutritional_info: (data.nutritional_info as Record<string, unknown> | null) ?? null,
     analysis: data.analysis
       ? mapAnalysisJson(data.analysis as Record<string, unknown>)
       : undefined,
@@ -149,19 +155,32 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     recordScan,
     addToCompare,
     removeFromCompare,
+    toggleBookmark,
   } = useUserData();
 
   const inCompare = userData.compareList.some((c) => c.id === (product?.id ?? ""));
+  const isBookmarked = userData.bookmarks.some((b) => b.id === (product?.id ?? ""));
   const lang: "en" | "hi" = userData.profile.language === "Hindi" ? "hi" : "en";
   // Tracks the language the currently-displayed analysis was rendered in,
   // so we don't re-translate on every render.
   const [analysisLang, setAnalysisLang] = useState<"en" | "hi">("en");
+  const [topRated, setTopRated] = useState<Product[]>([]);
 
   const score = product?.safety_score ?? 0;
   const grade = product?.grade ?? "?";
   const hasScore = product?.safety_score != null && product?.grade != null;
   const level = getSummaryLevel(score);
   const scoreColor = hasScore ? getScoreColor(score) : "#6b7c72";
+
+  const ingredientCounts = (() => {
+    const list = product?.analysis?.ingredients ?? [];
+    let harmful = 0; let beneficial = 0;
+    for (const ing of list) {
+      if (ing.risk === "danger" || ing.risk === "warning") harmful++;
+      else if (ing.risk === "safe") beneficial++;
+    }
+    return { harmful, beneficial };
+  })();
 
   // Dynamic OG meta tags
   useEffect(() => {
@@ -353,6 +372,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           grade: dbProduct.score_grade,
           image_url: dbProduct.image_url || undefined,
           fssai_license: dbProduct.fssai_license,
+          barcode: dbProduct.barcode,
+          nutritional_info: (dbProduct.nutritional_info as Record<string, unknown> | null) ?? null,
           analysis: analysis ? mapAnalysisJson(analysis) : undefined,
         });
         recordScan({
@@ -609,6 +630,35 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id]);
 
+  // Fetch top-rated products in the same category for the recommendation
+  // strip at the bottom. Excludes the current product.
+  useEffect(() => {
+    if (!product?.category || !product?.id) return;
+    const gen = loaderGen.current;
+    getTopRatedInCategory(product.category, product.barcode ?? product.id, 8)
+      .then((rows) => {
+        if (gen !== loaderGen.current) return;
+        // Map DB rows to the UI Product shape used by ProductCardHorizontal.
+        const mapped: Product[] = rows.map((p) => ({
+          id: p.barcode,
+          barcode: p.barcode,
+          name: p.name,
+          brand: p.brand,
+          category: p.category as string,
+          ingredients: p.ingredients,
+          safety_score: p.safety_score ?? null,
+          grade: (p.score_grade as Product["grade"]) ?? null,
+          image_url: p.image_url || "",
+          analysis: { summary: "", ingredients: [], warnings: [], healthier_alternative: "" },
+        }));
+        setTopRated(mapped);
+      })
+      .catch(() => {
+        if (gen === loaderGen.current) setTopRated([]);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id, product?.category]);
+
   // ── Render states ──────────────────────────────────────────────────────────
 
   if (notFoundState) {
@@ -695,6 +745,36 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         </Link>
       </div>
 
+      {/* Floating bookmark button (top-right, mirrors Oasis) */}
+      <div className="fixed top-4 right-4 z-50">
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={async () => {
+            if (!product) return;
+            const result = await toggleBookmark({
+              id: product.id,
+              name: product.name,
+              brand: product.brand,
+              category: product.category,
+              safety_score: product.safety_score,
+              grade: product.grade,
+            });
+            showToast(result === "added" ? "Saved" : "Removed from saved", "info");
+          }}
+          aria-label={isBookmarked ? "Remove from saved" : "Save product"}
+          aria-pressed={isBookmarked}
+          className="flex items-center justify-center w-10 h-10 rounded-full glass-light border border-black/[0.08] focus-visible:ring-2 focus-visible:ring-oasis-green"
+        >
+          {isBookmarked ? (
+            <BookmarkCheck size={18} className="text-[#007AFF]" />
+          ) : (
+            <Bookmark size={18} className="text-oasis-text" />
+          )}
+        </motion.button>
+      </div>
+
       <motion.div
         className="max-w-lg mx-auto pb-8 relative"
         initial="hidden"
@@ -719,10 +799,29 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           </motion.div>
         )}
 
+        {/* Product photo — prominent at the top of the hero like Oasis */}
+        {product.image_url && (
+          <motion.div
+            variants={fadeUp}
+            className={`flex justify-center px-5 ${analyzing || labelScanning ? "pt-4" : "pt-20"} pb-2`}
+          >
+            <div className="w-[140px] h-[180px] rounded-2xl bg-white flex items-center justify-center overflow-hidden" style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={product.image_url}
+                alt={product.name}
+                loading="lazy"
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+              />
+            </div>
+          </motion.div>
+        )}
+
         {/* Score Hero */}
         <motion.div
           variants={fadeUp}
-          className={`flex flex-col items-center px-5 ${analyzing || labelScanning ? "pt-4" : "pt-20"} pb-5`}
+          className={`flex flex-col items-center px-5 ${product.image_url ? "pt-2" : (analyzing || labelScanning ? "pt-4" : "pt-20")} pb-5`}
         >
           {hasScore ? (
             <motion.div
@@ -765,6 +864,35 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             )}
           </motion.div>
         </motion.div>
+
+        {/* At-a-glance ingredient tally — only when we have analysis */}
+        {product.analysis && product.analysis.ingredients.length > 0 && (
+          <motion.div variants={fadeUp} className="px-5 mb-4">
+            <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <AlertTriangle size={15} className="text-[#CC1010] shrink-0" />
+                <span className="text-[13px] text-black flex-1">Harmful substances</span>
+                <span
+                  className="inline-flex items-center justify-center min-w-[22px] h-[22px] rounded-full text-[12px] font-bold text-white tabular-nums px-2"
+                  style={{ background: ingredientCounts.harmful === 0 ? "#1E8040" : "#CC1010" }}
+                >
+                  {ingredientCounts.harmful}
+                </span>
+              </div>
+              <div className="h-px bg-black/[0.04] mx-4" />
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Leaf size={15} className="text-[#1E8040] shrink-0" />
+                <span className="text-[13px] text-black flex-1">Beneficial ingredients</span>
+                <span
+                  className="inline-flex items-center justify-center min-w-[22px] h-[22px] rounded-full text-[12px] font-bold text-white tabular-nums px-2"
+                  style={{ background: ingredientCounts.beneficial > 0 ? "#1E8040" : "#8E8E93" }}
+                >
+                  {ingredientCounts.beneficial}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Share buttons */}
         <motion.div variants={fadeUp} className="px-5 mb-4">
@@ -1092,20 +1220,100 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           </motion.div>
         )}
 
-        {/* Personalized note */}
-        <motion.div variants={fadeUp} className="px-5">
-          <div className="flex items-start gap-3 p-4 rounded-2xl bg-oasis-card border border-oasis-border">
-            <Heart size={18} className="text-oasis-green shrink-0 mt-0.5" />
-            <div>
-              <span className="text-sm font-semibold text-oasis-text">Personalized Insights</span>
-              <p className="text-xs text-oasis-muted leading-relaxed mt-1">
-                Set up your health profile to get warnings tailored to your conditions, allergies, and dietary preferences.
-              </p>
-              <Link href="/profile" className="inline-block text-xs text-oasis-green font-medium mt-2">
-                Set up profile &rarr;
-              </Link>
+        {/* Nutrition Facts — structured from label extraction when available */}
+        {product.nutritional_info && typeof product.nutritional_info === "object" && Object.keys(product.nutritional_info).length > 0 && (
+          <motion.div variants={fadeUp} className="px-5 mb-4">
+            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Nutrition Facts</h2>
+            <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+              {Object.entries(product.nutritional_info)
+                .filter(([, v]) => v != null && v !== "")
+                .slice(0, 12)
+                .map(([key, value], i) => (
+                  <div key={key} className={`flex items-center justify-between px-4 py-3 ${i > 0 ? "border-t border-black/[0.04]" : ""}`}>
+                    <span className="text-[13px] text-black capitalize">{key.replace(/_/g, " ")}</span>
+                    <span className="text-[13px] font-semibold text-black tabular-nums">
+                      {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Other info — packaging, barcode, etc. */}
+        <motion.div variants={fadeUp} className="px-5 mb-4">
+          <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Other info</h2>
+          <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+            {product.barcode && (
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Package size={14} className="text-oasis-muted" />
+                  <span className="text-[13px] text-black">Barcode</span>
+                </div>
+                <span className="text-[12px] font-mono text-oasis-muted">{product.barcode}</span>
+              </div>
+            )}
+            <div className={`flex items-center justify-between px-4 py-3 ${product.barcode ? "border-t border-black/[0.04]" : ""}`}>
+              <div className="flex items-center gap-2.5">
+                <Info size={14} className="text-oasis-muted" />
+                <span className="text-[13px] text-black">Category</span>
+              </div>
+              <span className="text-[13px] font-semibold text-black capitalize">{product.category}</span>
             </div>
           </div>
+        </motion.div>
+
+        {/* Top rated in category — discovery */}
+        {topRated.length > 0 && (
+          <motion.div variants={fadeUp} className="mb-4">
+            <div className="flex items-center gap-2 px-5 mb-3">
+              <Sparkles size={15} className="text-[#007AFF]" />
+              <h2 className="font-semibold text-[17px] text-oasis-text">Top-rated {product.category.toLowerCase()}</h2>
+            </div>
+            <div className="flex gap-3 overflow-x-auto hide-scrollbar px-5 pb-1">
+              {topRated.map((p) => (
+                <ProductCardHorizontal key={p.id} product={p} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Footer actions — how scoring works + report an issue + personalization hint */}
+        <motion.div variants={fadeUp} className="px-5 space-y-2">
+          <Link
+            href="/scoring"
+            className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-black/[0.06] active:bg-[#F2F2F7] transition-colors"
+            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}
+          >
+            <Info size={16} className="text-[#007AFF] shrink-0" />
+            <span className="text-sm font-semibold text-oasis-text flex-1">How scoring works</span>
+            <ExternalLink size={14} className="text-oasis-muted" />
+          </Link>
+
+          <Link
+            href={`mailto:reports@sift.app?subject=${encodeURIComponent(`Issue with ${product.name}`)}&body=${encodeURIComponent(`Product: ${product.name}\nBrand: ${product.brand}\nBarcode: ${product.barcode ?? id}\nScore: ${score}/100 (Grade ${grade})\n\nDescribe the issue:`)}`}
+            className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-black/[0.06] active:bg-[#F2F2F7] transition-colors"
+            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}
+          >
+            <Flag size={16} className="text-oasis-muted shrink-0" />
+            <span className="text-sm font-semibold text-oasis-text flex-1">Report an issue</span>
+            <ExternalLink size={14} className="text-oasis-muted" />
+          </Link>
+
+          {!hasPersonalization(userData.profile) && (
+            <Link
+              href="/profile"
+              className="flex items-start gap-3 p-4 rounded-2xl bg-[#007AFF]/08 border border-[#007AFF]/15"
+            >
+              <Heart size={16} className="text-[#007AFF] shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-semibold text-oasis-text block">Personalise your warnings</span>
+                <p className="text-xs text-oasis-muted leading-relaxed mt-1">
+                  Add your conditions and allergies in Profile to see warnings tailored to you.
+                </p>
+              </div>
+            </Link>
+          )}
         </motion.div>
       </motion.div>
     </div>

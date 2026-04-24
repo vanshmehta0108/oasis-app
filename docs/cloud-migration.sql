@@ -10,7 +10,8 @@ ALTER TABLE public.user_profiles
   ADD COLUMN IF NOT EXISTS scan_history jsonb NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS scan_count integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS recent_searches text[] NOT NULL DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS compare_list jsonb NOT NULL DEFAULT '[]'::jsonb;
+  ADD COLUMN IF NOT EXISTS compare_list jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS bookmarks jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- Ensure RLS is on and policies exist (safe to re-run).
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;

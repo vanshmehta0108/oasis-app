@@ -49,6 +49,27 @@ export async function getProductById(
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
+// Highest-scoring products in the same category, excluding the current
+// product. Used in the "Top rated in category" strip on product pages.
+export async function getTopRatedInCategory(
+  category: string,
+  excludeBarcode: string,
+  limit = 8,
+): Promise<Product[]> {
+  if (!category) return [];
+  const dbCat = category.toLowerCase();
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .eq("category", dbCat as ProductCategory)
+    .or(PUBLIC_ONLY)
+    .not("safety_score", "is", null)
+    .neq("barcode", excludeBarcode)
+    .order("safety_score", { ascending: false })
+    .limit(limit);
+  return (data as Product[]) ?? [];
+}
+
 export async function getProductsByCategory(
   category: string,
   limit = 40

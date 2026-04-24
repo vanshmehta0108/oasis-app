@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle, LogOut } from "lucide-react";
+import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle, LogOut, Bookmark } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useToast } from "@/lib/useToast";
@@ -296,6 +296,37 @@ export default function ProfilePage() {
             ))}
           </div>
         </motion.div>
+
+        {/* Saved products */}
+        {userData.bookmarks.length > 0 && (
+          <motion.div variants={fadeUp} className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Bookmark size={15} style={{ color: "#007AFF" }} />
+              <h2 className="font-semibold text-[17px] text-black">Saved Products</h2>
+              <span className="text-[11px]" style={{ color: "#8E8E93" }}>· {userData.bookmarks.length}</span>
+            </div>
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+              {userData.bookmarks.slice(0, 10).map((b, i) => (
+                <Link key={b.id} href={`/product/${b.id}`}>
+                  <motion.div
+                    whileTap={{ scale: 0.98 }}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? "border-t border-black/[0.06]" : ""}`}
+                  >
+                    <Bookmark size={14} className="text-[#007AFF] shrink-0" fill="#007AFF" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] font-semibold text-black truncate">{b.name}</p>
+                      <p className="text-[11px]" style={{ color: "#8E8E93" }}>{b.brand}</p>
+                    </div>
+                    <ScoreRing score={b.safety_score} grade={b.grade} size="sm" animate={false} />
+                  </motion.div>
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Scan History as timeline */}
         <motion.div variants={fadeUp} className="mb-5">

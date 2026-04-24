@@ -34,11 +34,22 @@ export interface CompareItem {
   addedAt: number;
 }
 
+export interface BookmarkItem {
+  id: string;
+  name: string;
+  brand: string;
+  category: string;
+  safety_score: number | null;
+  grade: string | null;
+  addedAt: number;
+}
+
 export interface UserData {
   profile: UserProfile;
   scanHistory: ScanRecord[];
   scanCount: number;
   compareList: CompareItem[];
+  bookmarks: BookmarkItem[];
   recentSearches: string[];
   onboarded: boolean;
 }
@@ -51,6 +62,7 @@ const EMPTY: UserData = {
   scanHistory: [],
   scanCount: 0,
   compareList: [],
+  bookmarks: [],
   recentSearches: [],
   onboarded: false,
 };
@@ -58,6 +70,7 @@ const EMPTY: UserData = {
 const HISTORY_MAX = 50;
 const RECENT_MAX = 6;
 const COMPARE_MAX = 3;
+const BOOKMARK_MAX = 50;
 
 // ── Row <-> UserData mapping ──────────────────────────────────────────────
 
@@ -72,6 +85,7 @@ type Row = {
   scan_count?: number | null;
   recent_searches?: string[] | null;
   compare_list?: unknown;
+  bookmarks?: unknown;
 };
 
 function parseScanHistory(raw: unknown): ScanRecord[] {
@@ -92,6 +106,15 @@ function parseCompareList(raw: unknown): CompareItem[] {
   ));
 }
 
+function parseBookmarks(raw: unknown): BookmarkItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((r): r is BookmarkItem => (
+    !!r && typeof r === "object" &&
+    typeof (r as BookmarkItem).id === "string" &&
+    typeof (r as BookmarkItem).name === "string"
+  ));
+}
+
 function rowToData(row: Row): UserData {
   return {
     profile: {
@@ -102,6 +125,7 @@ function rowToData(row: Row): UserData {
     scanHistory: parseScanHistory(row.scan_history),
     scanCount: row.scan_count ?? 0,
     compareList: parseCompareList(row.compare_list),
+    bookmarks: parseBookmarks(row.bookmarks),
     recentSearches: row.recent_searches ?? [],
     onboarded: !!row.onboarded,
   };
@@ -121,6 +145,7 @@ interface UserDataContextValue {
   addToCompare: (item: Omit<CompareItem, "addedAt">) => Promise<"added" | "already" | "full">;
   removeFromCompare: (id: string) => Promise<void>;
   clearCompare: () => Promise<void>;
+  toggleBookmark: (item: Omit<BookmarkItem, "addedAt">) => Promise<"added" | "removed">;
   addRecentSearch: (q: string) => Promise<void>;
   markOnboarded: () => Promise<void>;
 }
@@ -159,7 +184,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       const { data: row, error: selErr } = await supabase
         .from("user_profiles")
-        .select("health_conditions, allergies, language_preference, onboarded, scan_history, scan_count, recent_searches, compare_list")
+        .select("health_conditions, allergies, language_preference, onboarded, scan_history, scan_count, recent_searches, compare_list, bookmarks")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -288,6 +313,24 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     }));
   }, [mutate]);
 
+  const toggleBookmark = useCallback(async (item: Omit<BookmarkItem, "addedAt">) => {
+    const prev = dataRef.current;
+    const exists = prev.bookmarks.some((b) => b.id === item.id);
+    if (exists) {
+      await mutate((p) => {
+        const list = p.bookmarks.filter((b) => b.id !== item.id);
+        return { next: { ...p, bookmarks: list }, dbPatch: { bookmarks: list } };
+      });
+      return "removed" as const;
+    }
+    await mutate((p) => {
+      // Cap at BOOKMARK_MAX by dropping the oldest.
+      const withNew = [{ ...item, addedAt: Date.now() }, ...p.bookmarks].slice(0, BOOKMARK_MAX);
+      return { next: { ...p, bookmarks: withNew }, dbPatch: { bookmarks: withNew } };
+    });
+    return "added" as const;
+  }, [mutate]);
+
   const addRecentSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (trimmed.length < 2) return;
@@ -320,9 +363,10 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     addToCompare,
     removeFromCompare,
     clearCompare,
+    toggleBookmark,
     addRecentSearch,
     markOnboarded,
-  }), [data, ready, error, setProfile, recordScan, addToCompare, removeFromCompare, clearCompare, addRecentSearch, markOnboarded]);
+  }), [data, ready, error, setProfile, recordScan, addToCompare, removeFromCompare, clearCompare, toggleBookmark, addRecentSearch, markOnboarded]);
 
   return <UserDataContext.Provider value={value}>{children}</UserDataContext.Provider>;
 }
@@ -338,7 +382,7 @@ export function hasPersonalization(p: UserProfile): boolean {
   return p.conditions.length > 0 || p.allergies.length > 0;
 }
 
-export const LIMITS = { HISTORY_MAX, RECENT_MAX, COMPARE_MAX };
+export const LIMITS = { HISTORY_MAX, RECENT_MAX, COMPARE_MAX, BOOKMARK_MAX };
 
 // Re-exported for back-compat with existing component imports.
 export type { IngredientAnalysis };

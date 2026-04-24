@@ -95,6 +95,7 @@ export interface Database {
           scan_count: number;
           recent_searches: string[];
           compare_list: unknown;
+          bookmarks: unknown;
         };
         Insert: {
           id?: string;
@@ -110,6 +111,7 @@ export interface Database {
           scan_count?: number;
           recent_searches?: string[];
           compare_list?: unknown;
+          bookmarks?: unknown;
         };
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>;
       };
