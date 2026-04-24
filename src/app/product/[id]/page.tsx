@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
@@ -117,8 +117,10 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const { id } = use(params);
   const [product, setProduct] = useState<ProductData | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [labelScanning, setLabelScanning] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
   const [fssaiLooking, setFssaiLooking] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
   const score = product?.safety_score ?? 0;
@@ -173,6 +175,51 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       })
       .catch(console.error)
       .finally(() => setAnalyzing(false));
+  }
+
+  // Scan ingredient label photo → real-time OCR + AI analysis
+  function scanLabel(file: File) {
+    setLabelScanning(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      const barcode = id.startsWith("off-") ? id.replace("off-", "") : id.startsWith("web-") ? id.replace("web-", "") : id;
+      fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: base64,
+          barcode: barcode.startsWith("analyzed-") || barcode.startsWith("manual-") ? undefined : barcode,
+          name: product?.name,
+          brand: product?.brand,
+          category: product?.category || "food",
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((result) => {
+          if (!result?.analysis) {
+            showToast("Couldn't read the label — try better lighting or a closer shot", "error");
+            return;
+          }
+          const label = result.label_extraction;
+          setNotFoundState(false);
+          setProduct((prev) => ({
+            id,
+            name: prev?.name || label?.product_name || "Unknown Product",
+            brand: prev?.brand || label?.brand || "Unknown Brand",
+            category: prev?.category || label?.category_guess || "food",
+            ingredients: label?.ingredients?.length ? label.ingredients : (prev?.ingredients ?? []),
+            safety_score: result.analysis.score,
+            grade: result.analysis.grade,
+            image_url: prev?.image_url,
+            fssai_license: label?.fssai_license ?? prev?.fssai_license ?? null,
+            analysis: mapAnalysisJson(result.analysis),
+          }));
+        })
+        .catch(() => showToast("Label scan failed — please try again", "error"))
+        .finally(() => setLabelScanning(false));
+    };
+    reader.readAsDataURL(file);
   }
 
   // Main data loader
@@ -338,12 +385,43 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
   if (notFoundState) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-dvh px-6" style={{ background: "#F2F2F7" }}>
-        <span className="text-5xl mb-4">😔</span>
-        <h1 className="text-[18px] font-bold text-black mb-2">Product Not Found</h1>
-        <p className="text-sm text-center mb-5" style={{ color: "#8E8E93" }}>This product isn&apos;t in our database yet.</p>
-        <Link href="/scan" className="px-5 py-2.5 rounded-full text-white font-semibold text-sm" style={{ background: "#007AFF" }}>
-          Scan Another
+      <div className="flex flex-col items-center justify-center min-h-dvh px-6 text-center" style={{ background: "#F2F2F7" }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) scanLabel(f); e.target.value = ""; }}
+        />
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
+          style={{ background: "rgba(0,122,255,0.10)" }}
+        >
+          <Camera size={36} color="#007AFF" />
+        </div>
+        <h1 className="text-[20px] font-bold text-black mb-2">Not in our database</h1>
+        <p className="text-sm mb-6 max-w-xs" style={{ color: "#8E8E93" }}>
+          Scan the ingredient label on the back of the packaging and we&apos;ll analyse it in real time.
+        </p>
+        {labelScanning ? (
+          <div className="flex items-center gap-2 px-6 py-3 rounded-full" style={{ background: "#007AFF" }}>
+            <Loader2 size={16} color="#fff" className="animate-spin" />
+            <span className="text-sm font-semibold text-white">Analysing label…</span>
+          </div>
+        ) : (
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-6 py-3 rounded-full text-white font-semibold text-sm"
+            style={{ background: "#007AFF", boxShadow: "0 4px 16px rgba(0,122,255,0.36)" }}
+          >
+            <Camera size={16} color="#fff" />
+            Scan Ingredient Label
+          </motion.button>
+        )}
+        <Link href="/scan" className="mt-4 text-sm font-medium" style={{ color: "#8E8E93" }}>
+          Scan a different product
         </Link>
       </div>
     );
@@ -395,22 +473,28 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         animate="show"
         variants={stagger}
       >
-        {/* AI Analyzing Banner */}
-        {analyzing && (
+        {/* Status banners */}
+        {(analyzing || labelScanning) && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mx-5 mt-14 mb-2 flex items-center gap-3 p-3 rounded-xl bg-oasis-green/10 border border-oasis-green/20"
+            className={`mx-5 mt-14 mb-2 flex items-center gap-3 p-3 rounded-xl border ${
+              labelScanning
+                ? "bg-[#007AFF]/10 border-[#007AFF]/20"
+                : "bg-oasis-green/10 border-oasis-green/20"
+            }`}
           >
-            <Loader2 size={16} className="text-oasis-green animate-spin shrink-0" />
-            <p className="text-xs text-oasis-green font-medium">AI is analyzing ingredients... This may take a few seconds.</p>
+            <Loader2 size={16} className={`${labelScanning ? "text-[#007AFF]" : "text-oasis-green"} animate-spin shrink-0`} />
+            <p className={`text-xs font-medium ${labelScanning ? "text-[#007AFF]" : "text-oasis-green"}`}>
+              {labelScanning ? "Reading label and scoring ingredients…" : "AI is analysing ingredients… This may take a few seconds."}
+            </p>
           </motion.div>
         )}
 
         {/* Score Hero */}
         <motion.div
           variants={fadeUp}
-          className={`flex flex-col items-center px-5 ${analyzing ? "pt-4" : "pt-20"} pb-5`}
+          className={`flex flex-col items-center px-5 ${analyzing || labelScanning ? "pt-4" : "pt-20"} pb-5`}
         >
           {hasScore ? (
             <motion.div
@@ -422,10 +506,10 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </motion.div>
           ) : (
             <div className="w-[168px] h-[168px] rounded-full bg-white border-2 border-sift-sep-opaque flex items-center justify-center" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              {analyzing ? (
-                <Loader2 size={40} className="text-oasis-green animate-spin" />
+              {analyzing || labelScanning ? (
+                <Loader2 size={40} className={`${labelScanning ? "text-[#007AFF]" : "text-oasis-green"} animate-spin`} />
               ) : (
-                <span className="text-3xl text-oasis-muted">?</span>
+                <Camera size={36} color="#007AFF" />
               )}
             </div>
           )}
@@ -570,7 +654,17 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           );
         })()}
 
-        {/* Raw Ingredients (when no analysis yet) */}
+        {/* Hidden file input for label scanning */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) scanLabel(f); e.target.value = ""; }}
+        />
+
+        {/* Raw Ingredients (waiting for analysis — has ingredients) */}
         {!product.analysis && product.ingredients.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
             <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredients</h2>
@@ -580,12 +674,38 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               </p>
               {!analyzing && (
                 <button
-                  onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-","") : id)}
+                  onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-", "") : id)}
                   className="mt-3 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
                 >
-                  Analyze Ingredients →
+                  Analyse Ingredients →
                 </button>
               )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* No ingredients — prompt label scan */}
+        {!product.analysis && product.ingredients.length === 0 && !analyzing && !labelScanning && (
+          <motion.div variants={fadeUp} className="px-5 mb-4">
+            <div className="p-5 rounded-2xl bg-[#007AFF]/05 border border-[#007AFF]/15 flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(0,122,255,0.10)" }}>
+                <Camera size={22} color="#007AFF" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-black">No ingredient data found</p>
+                <p className="text-[12px] mt-1" style={{ color: "#8E8E93" }}>
+                  Scan the ingredient label on the packaging to get an instant safety score.
+                </p>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white font-semibold text-sm"
+                style={{ background: "#007AFF", boxShadow: "0 4px 14px rgba(0,122,255,0.30)" }}
+              >
+                <Camera size={14} color="#fff" />
+                Scan Ingredient Label
+              </motion.button>
             </div>
           </motion.div>
         )}
