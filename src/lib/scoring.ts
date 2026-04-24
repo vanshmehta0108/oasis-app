@@ -232,7 +232,8 @@ const PERSONALIZED_WARNINGS_SCHEMA: Schema = {
 
 export async function analyzeIngredients(
   ingredients: string[],
-  category: string
+  category: string,
+  fssaiLicense?: string | null
 ): Promise<SafetyAnalysis> {
   const client = getModel();
   const model = client.getGenerativeModel({
@@ -244,10 +245,16 @@ export async function analyzeIngredients(
     },
   });
 
+  const fssaiLine = fssaiLicense
+    ? `FSSAI License: ${fssaiLicense} (product is registered)`
+    : "FSSAI License: NOT DETECTED — unregistered or unlicensed product. Deduct 5-10 points from score and add a warning.";
+
   const prompt = [
     `Analyze the safety of this ${category} product sold in India.`,
     "",
     `Ingredients list: ${ingredients.join(", ")}`,
+    "",
+    fssaiLine,
     "",
     "For each ingredient:",
     "1. Identify its INS number if applicable",

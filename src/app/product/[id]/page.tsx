@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
@@ -24,6 +24,7 @@ interface ProductData {
   safety_score: number | null;
   grade: string | null;
   image_url?: string;
+  fssai_license?: string | null;
   analysis?: {
     summary: string;
     ingredients: IngredientAnalysis[];
@@ -47,6 +48,12 @@ function getScoreColor(score: number) {
   if (score >= 40) return "#FF6B00";
   if (score >= 20) return "#FF3B30";
   return "#FF3B30";
+}
+
+function validateFSSAI(license: string | null | undefined): "registered" | "invalid" | "unknown" {
+  if (!license) return "unknown";
+  const clean = license.replace(/[\s\-]/g, "");
+  return /^\d{14}$/.test(clean) ? "registered" : "invalid";
 }
 
 function mapAnalysisJson(analysis: Record<string, unknown>): ProductData["analysis"] {
@@ -82,6 +89,7 @@ function mapRawToProduct(data: Record<string, unknown>): ProductData {
     safety_score: (data.safety_score as number) ?? null,
     grade: (data.grade as string) ?? (data.score_grade as string) ?? null,
     image_url: data.image_url as string | undefined,
+    fssai_license: (data.fssai_license as string | null) ?? null,
     analysis: data.analysis
       ? mapAnalysisJson(data.analysis as Record<string, unknown>)
       : undefined,
@@ -138,12 +146,12 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   }, [product, score, grade]);
 
   // Trigger AI analysis for unscored products
-  function runAnalysis(ingredients: string[], category: string) {
+  function runAnalysis(ingredients: string[], category: string, barcode?: string) {
     setAnalyzing(true);
     fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ingredients, category: category || "food" }),
+      body: JSON.stringify({ ingredients, category: category || "food", ...(barcode ? { barcode } : {}) }),
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((result) => {
@@ -178,6 +186,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         safety_score: masterProduct.safety_score,
         grade: masterProduct.score_grade,
         image_url: masterProduct.image_url || undefined,
+        fssai_license: (masterProduct as unknown as Record<string, unknown>).fssai_license as string | null ?? null,
         analysis: analysis ? mapAnalysisJson(analysis) : undefined,
       });
       recordScan({
@@ -204,6 +213,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           safety_score: dbProduct.safety_score,
           grade: dbProduct.score_grade,
           image_url: dbProduct.image_url || undefined,
+          fssai_license: dbProduct.fssai_license,
           analysis: analysis ? mapAnalysisJson(analysis) : undefined,
         });
         recordScan({
@@ -234,7 +244,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           setProduct(mapRawToProduct(data));
           recordScan(data);
           if (data.needs_analysis && data.ingredients?.length > 0) {
-            runAnalysis(data.ingredients, data.category);
+            runAnalysis(data.ingredients, data.category, barcode);
           }
           return;
         }
@@ -251,7 +261,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               setProduct(mapRawToProduct(data.product));
               recordScan(data.product);
               if (data.needs_analysis && data.product.ingredients?.length > 0) {
-                runAnalysis(data.product.ingredients, data.product.category);
+                runAnalysis(data.product.ingredients, data.product.category, barcode);
               }
             } else {
               setNotFoundState(true);
@@ -270,7 +280,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           setProduct(mapRawToProduct({ ...data, id: data.id || productId }));
           recordScan(data);
           if (data.needs_analysis && data.ingredients?.length > 0) {
-            runAnalysis(data.ingredients, data.category);
+            runAnalysis(data.ingredients, data.category, barcode);
           }
           return;
         }
@@ -454,6 +464,47 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </div>
           </motion.div>
         )}
+
+        {/* FSSAI Compliance */}
+        {(() => {
+          const fssaiStatus = validateFSSAI(product.fssai_license);
+          if (fssaiStatus === "unknown") return null;
+          const isRegistered = fssaiStatus === "registered";
+          return (
+            <motion.div variants={fadeUp} className="px-5 mb-4">
+              <div
+                className={`flex items-center gap-3 p-3.5 rounded-2xl border ${
+                  isRegistered
+                    ? "bg-[#F0FBF4] border-[#1E8040]/15"
+                    : "bg-[#FFF0EE] border-[#FF3B30]/15"
+                }`}
+              >
+                {isRegistered ? (
+                  <BadgeCheck size={20} className="text-[#1E8040] shrink-0" />
+                ) : (
+                  <BadgeX size={20} className="text-[#CC1010] shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <span
+                    className={`text-sm font-bold ${isRegistered ? "text-[#1E8040]" : "text-[#CC1010]"}`}
+                  >
+                    {isRegistered ? "FSSAI Registered" : "FSSAI License Invalid"}
+                  </span>
+                  {isRegistered && product.fssai_license && (
+                    <p className="text-[10px] font-mono text-oasis-muted mt-0.5 truncate">
+                      {product.fssai_license}
+                    </p>
+                  )}
+                  {!isRegistered && (
+                    <p className="text-[10px] text-oasis-muted mt-0.5">
+                      License format unrecognized — verify before purchasing
+                    </p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {/* Raw Ingredients (when no analysis yet) */}
         {!product.analysis && product.ingredients.length > 0 && (

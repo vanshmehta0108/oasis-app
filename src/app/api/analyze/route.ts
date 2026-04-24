@@ -102,7 +102,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const analysis = await analyzeIngredients(finalIngredients, category);
+    const analysis = await analyzeIngredients(finalIngredients, category, labelData?.fssai_license ?? null);
 
     // Store result if we have a barcode
     if (barcode) {
