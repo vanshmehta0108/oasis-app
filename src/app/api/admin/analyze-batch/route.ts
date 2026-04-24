@@ -10,7 +10,7 @@ function isAuthorized(req: NextRequest): boolean {
   const key = req.headers.get("x-admin-key") || req.nextUrl.searchParams.get("key");
   const secret = process.env.ADMIN_SECRET;
   if (!secret) return false;
-  return key === secret;
+  return key === secret.trim();
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
