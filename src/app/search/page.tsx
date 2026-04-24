@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { SearchBar } from "@/components/SearchBar";
 import { ProductCard } from "@/components/ProductCard";
 import type { Product } from "@/lib/mockData";
-import { searchProducts as searchSupabase } from "@/lib/db";
+import { searchProducts as searchSupabase, getProductsByCategory } from "@/lib/db";
 import { Search, TrendingUp, Globe, Loader2, Database } from "lucide-react";
 import Link from "next/link";
 import { SkeletonSearchResults } from "@/components/Skeleton";
@@ -73,12 +73,25 @@ function SearchContent() {
   const handleSearch = useCallback((q: string) => setQuery(q), []);
   const handleCategory = useCallback((c: string) => setCategory(c), []);
 
+  // Category browse — load all products in category when no search query
+  useEffect(() => {
+    if (query.length >= 2 || category === "All") return;
+    setDbLoading(true);
+    setOffResults([]);
+    getProductsByCategory(category)
+      .then((rows) => setDbResults(rows.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>))))
+      .catch(() => setDbResults([]))
+      .finally(() => setDbLoading(false));
+  }, [category, query]);
+
   // Search Supabase + Open Food Facts with debounce
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query || query.length < 2) {
-      setDbResults([]);
-      setOffResults([]);
+      if (category === "All") {
+        setDbResults([]);
+        setOffResults([]);
+      }
       return;
     }
     debounceRef.current = setTimeout(async () => {
@@ -131,6 +144,7 @@ function SearchContent() {
   const uniqueOff = offResults.filter((p) => !dbBarcodes.has(p.barcode));
   const results: Product[] = [...dbResults, ...uniqueOff as unknown as Product[]];
   const isLoading = dbLoading || offLoading;
+  const isBrowsingCategory = category !== "All" && query.length < 2;
   const showEmpty = !query && category === "All";
 
   return (
@@ -140,7 +154,7 @@ function SearchContent() {
         animate={{ opacity: 1, y: 0 }}
         className="text-[28px] font-bold text-black tracking-tight mb-4"
       >
-        Search
+        {isBrowsingCategory ? category : "Search"}
       </motion.h1>
 
       <SearchBar
@@ -221,9 +235,9 @@ function SearchContent() {
           >
             <motion.div variants={fadeUp} className="flex items-center gap-2 mb-1">
               <p className="text-[11px] text-oasis-muted">
-                {results.length} result{results.length !== 1 ? "s" : ""}
+                {results.length} {isBrowsingCategory ? "product" : "result"}{results.length !== 1 ? "s" : ""}
               </p>
-              {dbResults.length > 0 && (
+              {dbResults.length > 0 && !isBrowsingCategory && (
                 <span className="flex items-center gap-1 text-[10px] text-emerald-400/70">
                   <Database size={10} /> {dbResults.length} from Sift DB
                 </span>

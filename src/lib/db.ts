@@ -43,6 +43,28 @@ export async function getProductById(
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
+export async function getProductsByCategory(
+  category: string,
+  limit = 40
+): Promise<Product[]> {
+  const categoryMap: Record<string, string> = {
+    Food: "food", Beverages: "beverage", Snacks: "snack",
+    Skincare: "skincare", Baby: "baby_food", Household: "household",
+  };
+  const dbCat = categoryMap[category] || category.toLowerCase();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("category", dbCat as ProductCategory)
+    .order("scan_count", { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error("Category browse failed:", error.message);
+    return [];
+  }
+  return (data as Product[]) ?? [];
+}
+
 export async function searchProducts(
   query: string,
   category?: string,
