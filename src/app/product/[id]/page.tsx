@@ -664,29 +664,62 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           onChange={(e) => { const f = e.target.files?.[0]; if (f) scanLabel(f); e.target.value = ""; }}
         />
 
-        {/* Raw Ingredients (waiting for analysis — has ingredients) */}
-        {!product.analysis && product.ingredients.length > 0 && (
-          <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredients</h2>
+        {/* Ingredient section — always shows something */}
+        <motion.div variants={fadeUp} className="px-5 mb-4">
+          <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredient Analysis</h2>
+
+          {/* Analysis complete — show per-ingredient cards */}
+          {product.analysis && product.analysis.ingredients.length > 0 && (
+            <IngredientList ingredients={product.analysis.ingredients} />
+          )}
+
+          {/* Analysis done but Gemini returned empty ingredients — fallback chips + retry */}
+          {product.analysis && product.analysis.ingredients.length === 0 && (
             <div className="p-4 rounded-2xl bg-oasis-card border border-oasis-border">
-              <p className="text-xs text-oasis-text-secondary leading-relaxed">
-                {product.ingredients.join(", ")}
-              </p>
-              {!analyzing && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {product.ingredients.map((ing, i) => (
+                  <span key={i} className="px-2.5 py-1 rounded-full text-[11px] font-medium text-oasis-text" style={{ background: "#F2F2F7" }}>
+                    {ing}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-", "") : id)}
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
+              >
+                Retry Analysis →
+              </button>
+            </div>
+          )}
+
+          {/* Waiting for analysis — show chips (never the comma blob) */}
+          {!product.analysis && product.ingredients.length > 0 && (
+            <div className="p-4 rounded-2xl bg-oasis-card border border-oasis-border">
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {product.ingredients.map((ing, i) => (
+                  <span key={i} className="px-2.5 py-1 rounded-full text-[11px] font-medium text-oasis-text" style={{ background: "#F2F2F7" }}>
+                    {ing}
+                  </span>
+                ))}
+              </div>
+              {analyzing || labelScanning ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <Loader2 size={12} className="text-oasis-green animate-spin" />
+                  <span className="text-[11px] text-oasis-green font-medium">Scoring each ingredient…</span>
+                </div>
+              ) : (
                 <button
                   onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-", "") : id)}
-                  className="mt-3 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
+                  className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
                 >
                   Analyse Ingredients →
                 </button>
               )}
             </div>
-          </motion.div>
-        )}
+          )}
 
-        {/* No ingredients — prompt label scan */}
-        {!product.analysis && product.ingredients.length === 0 && !analyzing && !labelScanning && (
-          <motion.div variants={fadeUp} className="px-5 mb-4">
+          {/* No ingredients at all — prompt label scan */}
+          {!product.analysis && product.ingredients.length === 0 && !analyzing && !labelScanning && (
             <div className="p-5 rounded-2xl bg-[#007AFF]/05 border border-[#007AFF]/15 flex flex-col items-center text-center gap-3">
               <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(0,122,255,0.10)" }}>
                 <Camera size={22} color="#007AFF" />
@@ -707,16 +740,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 Scan Ingredient Label
               </motion.button>
             </div>
-          </motion.div>
-        )}
-
-        {/* Ingredient Analysis */}
-        {product.analysis && (
-          <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredient Analysis</h2>
-            <IngredientList ingredients={product.analysis.ingredients} />
-          </motion.div>
-        )}
+          )}
+        </motion.div>
 
         {/* Warnings */}
         {product.analysis && product.analysis.warnings.length > 0 && (
