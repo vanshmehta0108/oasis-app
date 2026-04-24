@@ -50,6 +50,19 @@ function getScoreColor(score: number) {
   return "#FF3B30";
 }
 
+// Returns true only when the array looks like real ingredient names, not a
+// nutritional-panel OCR dump (numbers, RDA%, serving sizes, marketing copy).
+function hasCleanIngredients(ingredients: string[]): boolean {
+  if (ingredients.length === 0) return false;
+  const combined = ingredients.join(" ");
+  // Flag nutritional / label-dump keywords
+  const dump = /serving|kcal|kj|rda|nutritional|energy|carbohydrate|cholesterol|sodium|potassium|calcium|magnes|protein|per\s*\d+\s*(?:ml|g)|uom|approx|values\s*facts|\d{2,}\.\d+/i;
+  if (dump.test(combined)) return false;
+  // Any single token longer than 80 chars is a sentence, not an ingredient name
+  if (ingredients.some((s) => s.trim().length > 80)) return false;
+  return true;
+}
+
 function validateFSSAI(license: string | null | undefined): "registered" | "not_found" | "invalid" | "unknown" {
   if (license === null || license === undefined) return "unknown";
   if (license === "FSSAI_NOT_FOUND") return "not_found";
@@ -280,9 +293,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           loadExternal(id);
           return;
         }
-        // Auto-trigger AI analysis for DB products that have ingredients but no scoring yet
+        // Auto-trigger AI analysis for DB products that have clean ingredients but no scoring yet
         const dbAnalysis = found.analysis as unknown as Record<string, unknown> | null;
-        if (!dbAnalysis && found.ingredients?.length > 0) {
+        if (!dbAnalysis && hasCleanIngredients(found.ingredients ?? [])) {
           runAnalysis(found.ingredients, found.category as string, found.barcode);
         }
       })
@@ -300,7 +313,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           const data = JSON.parse(stored);
           setProduct(mapRawToProduct(data));
           recordScan(data);
-          if (data.needs_analysis && data.ingredients?.length > 0) {
+          if (data.needs_analysis && hasCleanIngredients(data.ingredients ?? [])) {
             runAnalysis(data.ingredients, data.category, barcode);
           }
           return;
@@ -317,7 +330,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             if (data?.found && data.product) {
               setProduct(mapRawToProduct(data.product));
               recordScan(data.product);
-              if (data.needs_analysis && data.product.ingredients?.length > 0) {
+              if (data.needs_analysis && hasCleanIngredients(data.product.ingredients ?? [])) {
                 runAnalysis(data.product.ingredients, data.product.category, barcode);
               }
             } else {
@@ -336,7 +349,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           const data = JSON.parse(stored);
           setProduct(mapRawToProduct({ ...data, id: data.id || productId }));
           recordScan(data);
-          if (data.needs_analysis && data.ingredients?.length > 0) {
+          if (data.needs_analysis && hasCleanIngredients(data.ingredients ?? [])) {
             runAnalysis(data.ingredients, data.category, barcode);
           }
           return;
@@ -692,8 +705,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </div>
           )}
 
-          {/* Waiting for analysis — show chips (never the comma blob) */}
-          {!product.analysis && product.ingredients.length > 0 && (
+          {/* Clean ingredients waiting for analysis — show as chips with spinner */}
+          {!product.analysis && hasCleanIngredients(product.ingredients) && (
             <div className="p-4 rounded-2xl bg-oasis-card border border-oasis-border">
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {product.ingredients.map((ing, i) => (
@@ -718,16 +731,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </div>
           )}
 
-          {/* No ingredients at all — prompt label scan */}
-          {!product.analysis && product.ingredients.length === 0 && !analyzing && !labelScanning && (
+          {/* No usable ingredients (missing or garbage data) — prompt label scan */}
+          {!product.analysis && !hasCleanIngredients(product.ingredients) && !analyzing && !labelScanning && (
             <div className="p-5 rounded-2xl bg-[#007AFF]/05 border border-[#007AFF]/15 flex flex-col items-center text-center gap-3">
               <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(0,122,255,0.10)" }}>
                 <Camera size={22} color="#007AFF" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-black">No ingredient data found</p>
+                <p className="text-sm font-semibold text-black">Ingredient data unavailable</p>
                 <p className="text-[12px] mt-1" style={{ color: "#8E8E93" }}>
-                  Scan the ingredient label on the packaging to get an instant safety score.
+                  Point your camera at the ingredient list on the back of the pack for an instant safety score.
                 </p>
               </div>
               <motion.button
