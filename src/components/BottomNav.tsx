@@ -15,10 +15,7 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !!localStorage.getItem("oasis-onboarded") && window.location.pathname !== "/scan";
-  });
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     setVisible(!!localStorage.getItem("oasis-onboarded") && pathname !== "/scan");

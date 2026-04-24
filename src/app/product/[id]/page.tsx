@@ -229,9 +229,15 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         return dbProduct; // signal found
       })
       .then((found) => {
-        if (found) return;
-        // 2. Not in DB — try external sources
-        loadExternal(id);
+        if (!found) {
+          loadExternal(id);
+          return;
+        }
+        // Auto-trigger AI analysis for DB products that have ingredients but no scoring yet
+        const dbAnalysis = found.analysis as unknown as Record<string, unknown> | null;
+        if (!dbAnalysis && found.ingredients?.length > 0) {
+          runAnalysis(found.ingredients, found.category as string, found.barcode);
+        }
       })
       .catch(() => {
         loadExternal(id);
@@ -573,9 +579,12 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 {product.ingredients.join(", ")}
               </p>
               {!analyzing && (
-                <p className="text-[11px] text-oasis-muted mt-3">
-                  AI analysis unavailable — set your Google AI API key to enable safety scoring.
-                </p>
+                <button
+                  onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-","") : id)}
+                  className="mt-3 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
+                >
+                  Analyze Ingredients →
+                </button>
               )}
             </div>
           </motion.div>
