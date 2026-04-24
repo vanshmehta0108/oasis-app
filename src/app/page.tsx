@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion, useInView } from "framer-motion";
 import {
-  Camera, ChevronRight, TrendingDown, Shield, ShieldAlert,
+  Camera, ChevronRight, TrendingDown, Shield, ShieldAlert, Scale,
   UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby, Home as HomeIcon, Package
 } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
@@ -13,6 +13,7 @@ import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
 import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
 import { getScanCount } from "@/lib/scanHistory";
+import { getCompareList } from "@/lib/compare";
 import { useRef, useEffect, useState } from "react";
 
 const stagger = {
@@ -110,6 +111,7 @@ export default function Home() {
   const [productCount, setProductCount] = useState(0);
   const [flaggedCount, setFlaggedCount] = useState(0);
   const [catCounts, setCatCounts] = useState<Record<string, number>>({});
+  const [compareCount, setCompareCount] = useState(0);
 
   useEffect(() => {
     const onboarded = localStorage.getItem("oasis-onboarded");
@@ -128,6 +130,14 @@ export default function Home() {
     getProductCount().then(setProductCount).catch(() => setProductCount(0));
     getFlaggedCount().then(setFlaggedCount).catch(() => setFlaggedCount(0));
     getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
+    const refreshCompare = () => setCompareCount(getCompareList().length);
+    refreshCompare();
+    window.addEventListener("sift-compare-changed", refreshCompare);
+    window.addEventListener("storage", refreshCompare);
+    return () => {
+      window.removeEventListener("sift-compare-changed", refreshCompare);
+      window.removeEventListener("storage", refreshCompare);
+    };
   }, []);
 
   if (checkingOnboarding) return null;
@@ -182,6 +192,21 @@ export default function Home() {
               Scan a Product
             </motion.div>
           </Link>
+
+          {compareCount > 0 && (
+            <Link href="/compare" aria-label={`Compare ${compareCount} products`}>
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center justify-center gap-2 w-full mt-3 py-3 rounded-2xl bg-white border border-[#007AFF]/20 text-[#007AFF] font-semibold text-sm"
+              >
+                <Scale size={16} />
+                Compare {compareCount} {compareCount === 1 ? "product" : "products"}
+                <ChevronRight size={14} />
+              </motion.div>
+            </Link>
+          )}
         </motion.div>
 
         {/* ── Stats ── */}

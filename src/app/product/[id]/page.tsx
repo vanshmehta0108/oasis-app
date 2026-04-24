@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
@@ -13,6 +13,7 @@ import { masterLookup } from "@/lib/master";
 import { getProductByBarcode as getDbProduct } from "@/lib/db";
 import { recordScan } from "@/lib/scanHistory";
 import { loadProfile, hasPersonalization } from "@/lib/profile";
+import { addToCompare, removeFromCompare, isInCompare, COMPARE_MAX } from "@/lib/compare";
 
 interface PersonalWarning {
   warning: string;
@@ -143,6 +144,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [fssaiLooking, setFssaiLooking] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
   const [personalLoading, setPersonalLoading] = useState(false);
+  const [inCompare, setInCompare] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -430,6 +432,44 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Sync compare state whenever product changes or the list mutates
+  useEffect(() => {
+    if (!product) return;
+    const refresh = () => setInCompare(isInCompare(product.id));
+    refresh();
+    window.addEventListener("sift-compare-changed", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("sift-compare-changed", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [product]);
+
+  function toggleCompare() {
+    if (!product) return;
+    if (inCompare) {
+      removeFromCompare(product.id);
+      setInCompare(false);
+      showToast("Removed from compare", "info");
+      return;
+    }
+    const result = addToCompare({
+      id: product.id,
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      safety_score: product.safety_score,
+      grade: product.grade,
+      summary: product.analysis?.summary,
+    });
+    if (result === "added") {
+      setInCompare(true);
+      showToast("Added to compare", "success");
+    } else if (result === "full") {
+      showToast(`Compare holds up to ${COMPARE_MAX} products — remove one first`, "error");
+    }
+  }
+
   // Personalized warnings — runs after analysis is present and only if the
   // user has set up conditions/allergies in their profile. Per-request
   // (not cached in DB) since it's user-specific.
@@ -643,12 +683,20 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           <motion.p variants={fadeUp} className="text-sm text-oasis-muted mt-1">
             {product.brand}
           </motion.p>
-          <motion.span
-            variants={fadeUp}
-            className="inline-block text-[11px] px-3 py-1 mt-2 rounded-full bg-oasis-green/10 text-oasis-green font-medium"
-          >
-            {product.category}
-          </motion.span>
+          <motion.div variants={fadeUp} className="flex items-center gap-1.5 mt-2 flex-wrap justify-center">
+            <span className="inline-block text-[11px] px-3 py-1 rounded-full bg-oasis-green/10 text-oasis-green font-medium">
+              {product.category}
+            </span>
+            {id.startsWith("manual-") && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-[#FF9F0A]/10 text-[#B87800] font-semibold"
+                title="User-submitted — not yet reviewed by our team"
+              >
+                <AlertTriangle size={10} />
+                Community submitted
+              </span>
+            )}
+          </motion.div>
         </motion.div>
 
         {/* Share buttons */}
@@ -687,6 +735,27 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <span className="text-sm font-medium text-oasis-text">Share</span>
             </motion.button>
           </div>
+
+          {/* Compare CTA */}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={toggleCompare}
+            aria-pressed={inCompare}
+            className={`w-full mt-2 flex items-center justify-center gap-2 py-2.5 rounded-xl border transition-colors ${
+              inCompare
+                ? "bg-[#007AFF]/10 border-[#007AFF]/25"
+                : "bg-white border-black/[0.08] active:bg-[#F2F2F7]"
+            }`}
+          >
+            {inCompare ? (
+              <Check size={15} className="text-[#007AFF]" />
+            ) : (
+              <Scale size={15} className="text-oasis-text" />
+            )}
+            <span className={`text-sm font-medium ${inCompare ? "text-[#007AFF]" : "text-oasis-text"}`}>
+              {inCompare ? "In compare — tap to remove" : "Add to compare"}
+            </span>
+          </motion.button>
         </motion.div>
 
         {/* Summary card */}

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { upsertProduct } from "@/lib/db";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { log } from "@/lib/log";
 import type { ScoreGrade } from "@/lib/database.types";
 
 const AddProductRequest = z.object({
@@ -41,6 +43,18 @@ export async function OPTIONS(): Promise<NextResponse> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  // 5 submissions per hour per IP — prevents drive-by spam while allowing
+  // a real contributor to add a few products in a row.
+  const rl = checkRateLimit(`add-product:${ip}`, { capacity: 5, refillPerMin: 5 / 60 });
+  if (!rl.ok) {
+    log.warn("add_product.rate_limited", { ip, retryAfter: rl.retryAfter });
+    return NextResponse.json(
+      { error: "Too many submissions", details: `Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.`, retryAfter: rl.retryAfter },
+      { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   try {
     const body = await req.json();
     const parsed = AddProductRequest.safeParse(body);
@@ -93,12 +107,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         : {}),
     });
 
+    log.info("add_product.ok", { ip, barcode: finalBarcode, isManual: finalBarcode.startsWith("manual-"), category: mappedCategory });
     return NextResponse.json(
       { product },
       { status: 201, headers: corsHeaders() }
     );
   } catch (error) {
-    console.error("Add product error:", error);
+    log.error("add_product.fail", { ip, err: error instanceof Error ? error.message : String(error) });
     const message =
       error instanceof Error ? error.message : "Failed to add product";
     return NextResponse.json(

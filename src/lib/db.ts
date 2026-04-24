@@ -8,6 +8,12 @@ import type {
   ScanSource,
 } from "./database.types";
 
+// Filter that excludes unreviewed user submissions from public aggregates.
+// Anything with a `manual-*` barcode was added via /api/add-product without
+// any moderation — it stays accessible via direct URL and scan history, but
+// we don't surface it in Trending/Worst/Recent/counts/search until approved.
+const PUBLIC_ONLY = "barcode.not.like.manual-%";
+
 // ── Single product lookups ──────────────────────────────────────────────────
 
 export async function getProductByBarcode(
@@ -56,6 +62,7 @@ export async function getProductsByCategory(
     .from("products")
     .select("*")
     .eq("category", dbCat as ProductCategory)
+    .or(PUBLIC_ONLY)
     .order("scan_count", { ascending: false })
     .limit(limit);
   if (error) {
@@ -78,6 +85,7 @@ export async function searchProducts(
     .from("products")
     .select("*")
     .or(`name.ilike.%${safe}%,brand.ilike.%${safe}%,barcode.eq.${safe}`)
+    .or(PUBLIC_ONLY)
     .limit(limit);
 
   if (category && category !== "All") {
@@ -108,6 +116,7 @@ export async function getTrendingProducts(limit = 6): Promise<Product[]> {
   const { data } = await supabase
     .from("products")
     .select("*")
+    .or(PUBLIC_ONLY)
     .order("scan_count", { ascending: false })
     .limit(limit);
   return (data as Product[]) ?? [];
@@ -117,6 +126,7 @@ export async function getWorstRated(limit = 4): Promise<Product[]> {
   const { data } = await supabase
     .from("products")
     .select("*")
+    .or(PUBLIC_ONLY)
     .not("safety_score", "is", null)
     .order("safety_score", { ascending: true })
     .limit(limit);
@@ -127,6 +137,7 @@ export async function getRecentProducts(limit = 4): Promise<Product[]> {
   const { data } = await supabase
     .from("products")
     .select("*")
+    .or(PUBLIC_ONLY)
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data as Product[]) ?? [];
@@ -135,7 +146,8 @@ export async function getRecentProducts(limit = 4): Promise<Product[]> {
 export async function getProductCount(): Promise<number> {
   const { count } = await supabase
     .from("products")
-    .select("*", { count: "exact", head: true });
+    .select("*", { count: "exact", head: true })
+    .or(PUBLIC_ONLY);
   return count || 0;
 }
 
@@ -143,6 +155,7 @@ export async function getFlaggedCount(): Promise<number> {
   const { count } = await supabase
     .from("products")
     .select("*", { count: "exact", head: true })
+    .or(PUBLIC_ONLY)
     .lt("safety_score", 50);
   return count || 0;
 }
@@ -235,8 +248,10 @@ export async function submitCommunityProduct(
 // ── Get all product barcodes (for sitemap) ──────────────────────────────────
 
 export async function getAllProductBarcodes(): Promise<string[]> {
+  // Sitemap — only public, non-manual submissions.
   const { data } = await supabase
     .from("products")
-    .select("barcode");
+    .select("barcode")
+    .or(PUBLIC_ONLY);
   return ((data as { barcode: string }[]) || []).map((r) => r.barcode);
 }
