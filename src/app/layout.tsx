@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { ToastProvider } from "@/lib/useToast";
+import { AuthProvider } from "@/lib/useUser";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
@@ -85,6 +86,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className="min-h-dvh bg-sift-bg text-sift-label antialiased">
         <ServiceWorkerRegistration />
+        <AuthProvider>
         <ToastProvider>
           <a
             href="#main-content"
@@ -99,6 +101,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SpeedInsights />
           <Analytics />
         </ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

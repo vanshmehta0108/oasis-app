@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle } from "lucide-react";
+import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle, LogOut } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useToast } from "@/lib/useToast";
 // Products now come from Supabase — no mock imports
 import { getScanHistory, getScanCount, type ScanRecord } from "@/lib/scanHistory";
+import { saveProfile as persistProfile, hydrateOnSignIn, loadProfile } from "@/lib/profile";
+import { signInWithGoogle, signOut, displayNameFor } from "@/lib/auth";
+import { useUser } from "@/lib/useUser";
 
 const healthConditions = [
   { name: "Diabetic", icon: "💉" },
@@ -28,22 +31,15 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.33, 1, 0.68, 1] as const } },
 };
 
-function loadProfile() {
-  if (typeof window === "undefined") return { conditions: [], allergies: [], language: "English" };
-  try {
-    const saved = localStorage.getItem("oasis-profile");
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return { conditions: [], allergies: [], language: "English" };
-}
-
 export default function ProfilePage() {
-  const [selectedConditions, setSelectedConditions] = useState<string[]>(() => loadProfile().conditions ?? []);
-  const [allergies, setAllergies] = useState<string[]>(() => loadProfile().allergies ?? []);
+  const { user, isAnonymous, authAvailable } = useUser();
+  const [selectedConditions, setSelectedConditions] = useState<string[]>(() => loadProfile().conditions);
+  const [allergies, setAllergies] = useState<string[]>(() => loadProfile().allergies);
   const [allergyInput, setAllergyInput] = useState("");
-  const [language, setLanguage] = useState<string>(() => loadProfile().language ?? "English");
+  const [language, setLanguage] = useState<string>(() => loadProfile().language);
   const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
   const [scanCount, setScanCount] = useState(0);
+  const [signingIn, setSigningIn] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -51,14 +47,45 @@ export default function ProfilePage() {
     setScanCount(getScanCount());
   }, []);
 
-  // Save profile to localStorage whenever conditions, allergies, or language change
+  // Pull latest profile from cloud whenever the signed-in user changes.
+  // Merges local + cloud so a user signing in from a new device doesn't
+  // blow away the conditions/allergies they already set up locally.
   useEffect(() => {
-    localStorage.setItem("oasis-profile", JSON.stringify({
+    if (!user || isAnonymous) return;
+    let cancelled = false;
+    hydrateOnSignIn().then((merged) => {
+      if (cancelled) return;
+      setSelectedConditions(merged.conditions);
+      setAllergies(merged.allergies);
+      setLanguage(merged.language);
+    });
+    return () => { cancelled = true; };
+  }, [user, isAnonymous]);
+
+  // Save profile (local + cloud) whenever it changes.
+  useEffect(() => {
+    persistProfile({
       conditions: selectedConditions,
       allergies,
-      language,
-    }));
+      language: language === "Hindi" ? "Hindi" : "English",
+    });
   }, [selectedConditions, allergies, language]);
+
+  async function handleSignIn() {
+    setSigningIn(true);
+    const { ok, error } = await signInWithGoogle();
+    if (!ok) {
+      setSigningIn(false);
+      showToast(error || "Sign-in failed — please try again", "error");
+    }
+    // On success the browser redirects to Google; no need to reset state.
+  }
+
+  async function handleSignOut() {
+    if (!confirm("Sign out? Your profile will stay on this device but won't sync to other devices.")) return;
+    await signOut();
+    showToast("Signed out", "info");
+  }
 
   const toggleCondition = (c: string) => {
     setSelectedConditions((prev) =>
@@ -85,13 +112,57 @@ export default function ProfilePage() {
         animate="show"
         variants={stagger}
       >
-        {/* Avatar area with gradient bg */}
+        {/* Avatar area */}
         <motion.div variants={fadeUp} className="flex flex-col items-center pt-2 pb-6 mb-2">
-          <div className="w-20 h-20 rounded-full bg-white border border-black/[0.08] flex items-center justify-center mb-3" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <User size={32} style={{ color: "#007AFF" }} />
+          <div className="w-20 h-20 rounded-full bg-white border border-black/[0.08] flex items-center justify-center mb-3 overflow-hidden" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            {user?.user_metadata?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.user_metadata.avatar_url as string} alt="Profile picture" className="w-full h-full object-cover" />
+            ) : (
+              <User size={32} style={{ color: "#007AFF" }} />
+            )}
           </div>
-          <h1 className="font-bold tracking-tight text-[22px] text-black">Your Profile</h1>
-          <span className="text-xs mt-1" style={{ color: "#8E8E93" }}>Personalize your safety alerts</span>
+          <h1 className="font-bold tracking-tight text-[22px] text-black">
+            {user && !isAnonymous ? displayNameFor(user) : "Your Profile"}
+          </h1>
+          <span className="text-xs mt-1" style={{ color: "#8E8E93" }}>
+            {isAnonymous ? "Personalize your safety alerts" : user?.email || "Signed in"}
+          </span>
+
+          {/* Account actions */}
+          {authAvailable && isAnonymous && (
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={handleSignIn}
+              disabled={signingIn}
+              className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-black/[0.12] text-sm font-semibold text-black disabled:opacity-60"
+              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+            >
+              <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+                <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+                <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+                <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+              </svg>
+              {signingIn ? "Opening Google…" : "Sign in with Google"}
+            </motion.button>
+          )}
+          {!authAvailable && (
+            <span className="mt-3 text-[10px] max-w-xs text-center" style={{ color: "#8E8E93" }}>
+              Cloud sync not yet enabled for this deployment — your data stays on this device.
+            </span>
+          )}
+          {user && !isAnonymous && (
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={handleSignOut}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium"
+              style={{ color: "#8E8E93" }}
+            >
+              <LogOut size={12} aria-hidden="true" />
+              Sign out
+            </motion.button>
+          )}
         </motion.div>
 
         {/* Stats row */}
