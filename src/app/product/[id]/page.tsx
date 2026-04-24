@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
@@ -12,6 +12,14 @@ import type { IngredientAnalysis } from "@/lib/mockData";
 import { masterLookup } from "@/lib/master";
 import { getProductByBarcode as getDbProduct } from "@/lib/db";
 import { recordScan } from "@/lib/scanHistory";
+import { loadProfile, hasPersonalization } from "@/lib/profile";
+
+interface PersonalWarning {
+  warning: string;
+  severity: "info" | "moderate" | "serious";
+  related_condition: string;
+  triggering_ingredient: string;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -133,6 +141,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [labelScanning, setLabelScanning] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
   const [fssaiLooking, setFssaiLooking] = useState(false);
+  const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
+  const [personalLoading, setPersonalLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -419,6 +429,44 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Personalized warnings — runs after analysis is present and only if the
+  // user has set up conditions/allergies in their profile. Per-request
+  // (not cached in DB) since it's user-specific.
+  useEffect(() => {
+    if (!product?.analysis?.ingredients?.length) return;
+    const profile = loadProfile();
+    if (!hasPersonalization(profile)) return;
+
+    const controller = new AbortController();
+    const gen = loaderGen.current;
+    setPersonalLoading(true);
+    fetch("/api/personalize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ingredients: product.ingredients,
+        conditions: profile.conditions,
+        allergies: profile.allergies,
+      }),
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (gen !== loaderGen.current) return;
+        setPersonalWarnings(Array.isArray(data?.warnings) ? data.warnings : []);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        // Silent fail — personalized warnings are additive, not required.
+        if (gen === loaderGen.current) setPersonalWarnings([]);
+      })
+      .finally(() => {
+        if (gen === loaderGen.current) setPersonalLoading(false);
+      });
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.analysis?.summary]);
 
   // Auto-lookup FSSAI when not in DB
   useEffect(() => {
@@ -816,7 +864,50 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           )}
         </motion.div>
 
-        {/* Warnings */}
+        {/* Warnings for You — personalized, only when profile has conditions/allergies */}
+        {product.analysis && (personalLoading || (personalWarnings && personalWarnings.length > 0)) && (
+          <motion.div variants={fadeUp} className="px-5 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCircle size={16} className="text-[#007AFF]" />
+              <h2 className="font-semibold text-[17px] text-oasis-text">Warnings for You</h2>
+            </div>
+            {personalLoading ? (
+              <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-oasis-card border border-oasis-border">
+                <Loader2 size={14} className="text-[#007AFF] animate-spin" />
+                <span className="text-xs text-oasis-muted">Checking against your health profile…</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {personalWarnings!.map((w, i) => {
+                  const isSerious = w.severity === "serious";
+                  const isModerate = w.severity === "moderate";
+                  const bg = isSerious ? "bg-[#FFF0EE]" : isModerate ? "bg-[#FFF2E8]" : "bg-[#EBF3FF]";
+                  const border = isSerious ? "border-[#FF3B30]/20" : isModerate ? "border-[#FF9F0A]/20" : "border-[#007AFF]/20";
+                  const iconColor = isSerious ? "text-[#CC1010]" : isModerate ? "text-[#CC5200]" : "text-[#0056CC]";
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.06 }}
+                      className={`flex items-start gap-2.5 p-3 rounded-xl ${bg} border ${border}`}
+                    >
+                      <AlertTriangle size={14} className={`${iconColor} shrink-0 mt-0.5`} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs ${iconColor} leading-relaxed`}>{w.warning}</p>
+                        <p className="text-[10px] text-oasis-muted mt-1">
+                          {w.related_condition} · {w.triggering_ingredient}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Warnings (generic) */}
         {product.analysis && product.analysis.warnings.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
             <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Warnings</h2>

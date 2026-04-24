@@ -351,6 +351,80 @@ export async function lookupFSSAIOnline(
   }
 }
 
+// Translate a full SafetyAnalysis into another language. Only natural
+// language fields get translated — score/grade/risk_level values stay
+// canonical so the UI doesn't need per-locale enum handling.
+export async function translateAnalysis(
+  analysis: SafetyAnalysis,
+  targetLang: "hi",
+): Promise<SafetyAnalysis> {
+  const client = getGenAI();
+  if (!client) return analysis;
+
+  const languageName = targetLang === "hi" ? "Hindi (हिंदी, Devanagari script)" : targetLang;
+
+  const TRANSLATE_SCHEMA: Schema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      summary: { type: SchemaType.STRING },
+      warnings: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      healthier_tip: { type: SchemaType.STRING },
+      ingredients: {
+        type: SchemaType.ARRAY,
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: { type: SchemaType.STRING },
+            explanation: { type: SchemaType.STRING },
+          },
+          required: ["name", "explanation"],
+        },
+      },
+    },
+    required: ["summary", "warnings", "healthier_tip", "ingredients"],
+  };
+
+  const model = client.getGenerativeModel({
+    model: MODEL,
+    systemInstruction: [
+      `You translate Indian food safety content into ${languageName}.`,
+      "Preserve INS numbers, chemical names in parentheses, and units (mg, g, ml) verbatim.",
+      "Keep ingredient names recognizable — for common items, use the familiar Hindi name",
+      "but retain the English in parentheses on first mention if it aids clarity.",
+      "Translate tone faithfully — alarmist in, alarmist out; neutral in, neutral out.",
+    ].join("\n"),
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: TRANSLATE_SCHEMA,
+    },
+  });
+
+  const payload = {
+    summary: analysis.summary,
+    warnings: analysis.warnings,
+    healthier_tip: analysis.healthier_tip,
+    ingredients: analysis.ingredients.map((i) => ({ name: i.name, explanation: i.explanation })),
+  };
+
+  const res = await model.generateContent(
+    `Translate each field of this JSON into ${languageName}. Keep keys unchanged.\n\n${JSON.stringify(payload)}`,
+  );
+  const translated = JSON.parse(res.response.text()) as typeof payload;
+
+  return {
+    ...analysis,
+    summary: translated.summary || analysis.summary,
+    warnings: translated.warnings?.length ? translated.warnings : analysis.warnings,
+    healthier_tip: translated.healthier_tip || analysis.healthier_tip,
+    ingredients: analysis.ingredients.map((orig, i) => {
+      const t = translated.ingredients?.[i];
+      return t
+        ? { ...orig, name: t.name || orig.name, explanation: t.explanation || orig.explanation }
+        : orig;
+    }),
+  };
+}
+
 export async function getPersonalizedWarnings(
   ingredients: string[],
   healthConditions: string[],

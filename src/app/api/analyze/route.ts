@@ -4,7 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { masterLookup } from "@/lib/master";
 import { supabase } from "@/lib/supabase";
-import { analyzeIngredients, analyzeLabel } from "@/lib/scoring";
+import { analyzeIngredients, analyzeLabel, translateAnalysis } from "@/lib/scoring";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { log } from "@/lib/log";
 import type { Product, ProductInsert, ProductCategory } from "@/lib/database.types";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
@@ -16,6 +18,7 @@ const AnalyzeRequest = z.object({
   ingredients: z.array(z.string().min(1)).min(1, "Ingredients list cannot be empty").optional(),
   image: z.string().min(100, "Image data is too short to be valid").optional(),
   category: z.string().default("food"),
+  lang: z.enum(["en", "hi"]).default("en"),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -25,9 +28,6 @@ function corsHeaders(): HeadersInit {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
-    "X-RateLimit-Limit": "30",
-    "X-RateLimit-Remaining": "29",
-    "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 60),
   };
 }
 
@@ -38,6 +38,10 @@ function errorResponse(message: string, status: number, details?: string): NextR
   );
 }
 
+function clientIp(req: NextRequest): string {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+}
+
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
 export async function OPTIONS(): Promise<NextResponse> {
@@ -45,6 +49,10 @@ export async function OPTIONS(): Promise<NextResponse> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const ip = clientIp(req);
+  // Image requests are ~100x more expensive (Gemini vision call); stricter bucket.
+  const started = Date.now();
+
   try {
     const body = await req.json();
     const parsed = AnalyzeRequest.safeParse(body);
@@ -54,7 +62,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return errorResponse("Invalid request", 400, firstIssue?.message);
     }
 
-    const { barcode, name: productName, brand: productBrand, ingredients, image, category } = parsed.data;
+    const { barcode, name: productName, brand: productBrand, ingredients, image, category, lang } = parsed.data;
+
+    // Rate limit AFTER parse so malformed bodies don't burn tokens, but
+    // BEFORE the expensive Gemini call. Image calls get a tighter bucket.
+    const isImage = !!image;
+    const rl = checkRateLimit(
+      `analyze:${isImage ? "img" : "txt"}:${ip}`,
+      isImage ? { capacity: 6, refillPerMin: 6 } : { capacity: 30, refillPerMin: 30 },
+    );
+    if (!rl.ok) {
+      log.warn("analyze.rate_limited", { ip, isImage, retryAfter: rl.retryAfter });
+      return NextResponse.json(
+        { error: "Rate limit exceeded", details: `Too many requests. Retry in ${rl.retryAfter}s.`, retryAfter: rl.retryAfter },
+        { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
+      );
+    }
 
     if (!ingredients && !image && !barcode) {
       return errorResponse("Provide at least one of: barcode, ingredients, or image", 400);
@@ -117,15 +140,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     try {
       analysis = await analyzeIngredients(finalIngredients, category, labelData?.fssai_license ?? null);
     } catch (err) {
-      console.error("Ingredient analysis failed:", err);
+      log.error("analyze.ingredients_fail", { ip, err: err instanceof Error ? err.message : String(err) });
       const message = err instanceof Error ? err.message : "Analysis failed";
-      // Surface rate-limit / quota errors clearly so the client can retry
       const isRateLimit = /rate|quota|429|resource_exhausted/i.test(message);
       return errorResponse(
         isRateLimit ? "Analysis temporarily unavailable" : "Analysis failed",
         isRateLimit ? 429 : 500,
         isRateLimit ? "Our AI is rate-limited right now. Please retry in a minute." : message
       );
+    }
+
+    // Optional localization — happens AFTER persisting the canonical English
+    // version so the DB cache always holds the source-of-truth English
+    // analysis. Hindi output is per-request, not stored.
+    let localizedAnalysis = analysis;
+    if (lang === "hi") {
+      try {
+        localizedAnalysis = await translateAnalysis(analysis, "hi");
+      } catch (err) {
+        log.warn("analyze.translate_fail", { ip, lang, err: err instanceof Error ? err.message : String(err) });
+        // Fall back to English rather than 500 — user still gets a result.
+      }
     }
 
     // Store result if we have a barcode
@@ -157,23 +192,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .select()
         .single();
 
+      log.info("analyze.ok", { ip, source: "analyzed", barcode, isImage, lang, durationMs: Date.now() - started, score: analysis.score });
       return NextResponse.json(
         {
           source: "analyzed",
           product: upserted as Product | null,
-          analysis,
+          analysis: localizedAnalysis,
           label_extraction: labelData,
+          lang,
         },
         { headers: corsHeaders() }
       );
     }
 
+    log.info("analyze.ok", { ip, source: "analyzed", isImage, lang, durationMs: Date.now() - started, score: analysis.score });
     return NextResponse.json(
-      { source: "analyzed", analysis, label_extraction: labelData },
+      { source: "analyzed", analysis: localizedAnalysis, label_extraction: labelData, lang },
       { headers: corsHeaders() }
     );
   } catch (error) {
-    console.error("Analysis error:", error);
+    log.error("analyze.fail", { ip, err: error instanceof Error ? error.message : String(error) });
     const message = error instanceof Error ? error.message : "Analysis failed";
     return errorResponse(message, 500);
   }
