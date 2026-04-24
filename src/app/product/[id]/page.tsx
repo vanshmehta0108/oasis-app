@@ -164,9 +164,14 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     setMeta("og:type", "article");
   }, [product, score, grade]);
 
+  // Guards against late responses writing state for a product the user has
+  // already navigated away from. Bumped on each id change by the loader effect.
+  const loaderGen = useRef(0);
+
   // Trigger AI analysis for unscored products
   function runAnalysis(ingredients: string[], category: string, barcode?: string) {
     setAnalyzing(true);
+    const gen = loaderGen.current;
     fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -174,6 +179,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((result) => {
+        if (gen !== loaderGen.current) return; // user navigated away
         if (!result?.analysis) return;
         setProduct((prev) =>
           prev
@@ -187,15 +193,31 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         );
       })
       .catch(console.error)
-      .finally(() => setAnalyzing(false));
+      .finally(() => {
+        if (gen === loaderGen.current) setAnalyzing(false);
+      });
   }
 
   // Scan ingredient label photo → real-time OCR + AI analysis
   function scanLabel(file: File) {
     setLabelScanning(true);
+    const gen = loaderGen.current;
     const reader = new FileReader();
+    const finish = () => {
+      if (gen === loaderGen.current) setLabelScanning(false);
+    };
+    reader.onerror = () => {
+      finish();
+      showToast("Couldn't read the image file — please try again", "error");
+    };
     reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
+      const result = reader.result;
+      if (typeof result !== "string" || !result.includes(",")) {
+        finish();
+        showToast("Image couldn't be processed — try a different photo", "error");
+        return;
+      }
+      const base64 = result.split(",")[1];
       const barcode = id.startsWith("off-") ? id.replace("off-", "") : id.startsWith("web-") ? id.replace("web-", "") : id;
       fetch("/api/analyze", {
         method: "POST",
@@ -210,6 +232,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       })
         .then((res) => (res.ok ? res.json() : null))
         .then((result) => {
+          if (gen !== loaderGen.current) return;
           if (!result?.analysis) {
             showToast("Couldn't read the label — try better lighting or a closer shot", "error");
             return;
@@ -229,14 +252,35 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             analysis: mapAnalysisJson(result.analysis),
           }));
         })
-        .catch(() => showToast("Label scan failed — please try again", "error"))
-        .finally(() => setLabelScanning(false));
+        .catch(() => {
+          if (gen !== loaderGen.current) return;
+          showToast("Label scan failed — please try again", "error");
+        })
+        .finally(finish);
     };
     reader.readAsDataURL(file);
   }
 
   // Main data loader
   useEffect(() => {
+    // Bump generation so any in-flight request from a previous product
+    // can detect the change and short-circuit instead of overwriting state
+    loaderGen.current += 1;
+    const gen = loaderGen.current;
+
+    // Reset transient state for the new product
+    setProduct(null);
+    setNotFoundState(false);
+    setAnalyzing(false);
+    setLabelScanning(false);
+
+    // Helper: parse sessionStorage JSON without crashing the page if the
+    // value was written by an older version with a different shape
+    const safeParse = <T,>(raw: string | null): T | null => {
+      if (!raw) return null;
+      try { return JSON.parse(raw) as T; } catch { return null; }
+    };
+
     // 0. Try static master sheet first (zero cost, instant)
     const masterProduct = masterLookup(id);
     if (masterProduct && masterProduct.safety_score !== null) {
@@ -258,6 +302,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         name: masterProduct.name,
         brand: masterProduct.brand,
         category: masterProduct.category,
+        safety_score: masterProduct.safety_score,
+        grade: masterProduct.score_grade,
       });
       return; // Done — no DB or API calls needed
     }
@@ -265,6 +311,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     // 1. Try Supabase DB
     getDbProduct(id)
       .then((dbProduct) => {
+        if (gen !== loaderGen.current) return null;
         if (!dbProduct) return null;
 
         const analysis = dbProduct.analysis as unknown as Record<string, unknown> | null;
@@ -285,41 +332,43 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           name: dbProduct.name,
           brand: dbProduct.brand,
           category: dbProduct.category as string,
+          safety_score: dbProduct.safety_score,
+          grade: dbProduct.score_grade,
         });
-        return dbProduct; // signal found
+        return dbProduct;
       })
       .then((found) => {
+        if (gen !== loaderGen.current) return;
         if (!found) {
           loadExternal(id);
           return;
         }
-        // Auto-trigger AI analysis for DB products that have clean ingredients but no scoring yet
         const dbAnalysis = found.analysis as unknown as Record<string, unknown> | null;
         if (!dbAnalysis && hasCleanIngredients(found.ingredients ?? [])) {
           runAnalysis(found.ingredients, found.category as string, found.barcode);
         }
       })
       .catch(() => {
-        loadExternal(id);
+        if (gen === loaderGen.current) loadExternal(id);
       });
 
     function loadExternal(productId: string) {
+      if (gen !== loaderGen.current) return;
+
       // OFF products
       if (productId.startsWith("off-")) {
         const barcode = productId.replace("off-", "");
-        const stored = sessionStorage.getItem(`off-product-${barcode}`);
+        const stored = safeParse<Record<string, unknown>>(sessionStorage.getItem(`off-product-${barcode}`));
 
         if (stored) {
-          const data = JSON.parse(stored);
-          setProduct(mapRawToProduct(data));
-          recordScan(data);
-          if (data.needs_analysis && hasCleanIngredients(data.ingredients ?? [])) {
-            runAnalysis(data.ingredients, data.category, barcode);
+          setProduct(mapRawToProduct(stored));
+          recordScan(stored as unknown as Parameters<typeof recordScan>[0]);
+          if (stored.needs_analysis && hasCleanIngredients((stored.ingredients as string[]) ?? [])) {
+            runAnalysis(stored.ingredients as string[], stored.category as string, barcode);
           }
           return;
         }
 
-        // Fetch from lookup API
         fetch("/api/lookup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -327,6 +376,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         })
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
+            if (gen !== loaderGen.current) return;
             if (data?.found && data.product) {
               setProduct(mapRawToProduct(data.product));
               recordScan(data.product);
@@ -337,31 +387,31 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               setNotFoundState(true);
             }
           })
-          .catch(() => setNotFoundState(true));
+          .catch(() => {
+            if (gen === loaderGen.current) setNotFoundState(true);
+          });
         return;
       }
 
       // Web-enriched products
       if (productId.startsWith("web-")) {
         const barcode = productId.replace("web-", "");
-        const stored = sessionStorage.getItem(`web-product-${barcode}`);
+        const stored = safeParse<Record<string, unknown>>(sessionStorage.getItem(`web-product-${barcode}`));
         if (stored) {
-          const data = JSON.parse(stored);
-          setProduct(mapRawToProduct({ ...data, id: data.id || productId }));
-          recordScan(data);
-          if (data.needs_analysis && hasCleanIngredients(data.ingredients ?? [])) {
-            runAnalysis(data.ingredients, data.category, barcode);
+          setProduct(mapRawToProduct({ ...stored, id: (stored.id as string) || productId }));
+          recordScan(stored as unknown as Parameters<typeof recordScan>[0]);
+          if (stored.needs_analysis && hasCleanIngredients((stored.ingredients as string[]) ?? [])) {
+            runAnalysis(stored.ingredients as string[], stored.category as string, barcode);
           }
           return;
         }
       }
 
       // Analyzed products from photo scan
-      const analyzedData = sessionStorage.getItem(`analyzed-${productId}`);
-      if (analyzedData) {
-        const data = JSON.parse(analyzedData);
-        setProduct(mapRawToProduct(data));
-        recordScan(data);
+      const analyzed = safeParse<Record<string, unknown>>(sessionStorage.getItem(`analyzed-${productId}`));
+      if (analyzed) {
+        setProduct(mapRawToProduct(analyzed));
+        recordScan(analyzed as unknown as Parameters<typeof recordScan>[0]);
         return;
       }
 
@@ -375,22 +425,32 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     if (!product || product.fssai_license !== null) return;
     const barcode = id.startsWith("off-") ? id.replace("off-", "") : id.startsWith("web-") ? id.replace("web-", "") : id;
     if (!barcode || barcode.startsWith("analyzed-") || barcode.startsWith("manual-")) return;
+
+    const controller = new AbortController();
+    const gen = loaderGen.current;
     setFssaiLooking(true);
     fetch("/api/fssai-lookup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: product.name, brand: product.brand, barcode }),
+      signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (gen !== loaderGen.current) return;
         if (data) {
           setProduct((prev) =>
             prev ? { ...prev, fssai_license: data.license ?? FSSAI_SENTINEL } : prev
           );
         }
       })
-      .catch(console.error)
-      .finally(() => setFssaiLooking(false));
+      .catch((err) => {
+        if (err?.name !== "AbortError") console.error(err);
+      })
+      .finally(() => {
+        if (gen === loaderGen.current) setFssaiLooking(false);
+      });
+    return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id]);
 
@@ -790,7 +850,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   {product.analysis.healthier_alternative}
                 </p>
                 <Link
-                  href={`https://www.amazon.in/s?k=${encodeURIComponent(product.analysis?.healthier_alternative?.split(".")[0] || product.name)}`}
+                  href={`https://www.amazon.in/s?k=${encodeURIComponent(
+                    (product.analysis?.healthier_alternative?.split(/[.,;\n]/)[0] || product.name).slice(0, 80).trim()
+                  )}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg bg-[#1E8040]/10 border border-[#1E8040]/20 text-[#1E8040] text-xs font-semibold"

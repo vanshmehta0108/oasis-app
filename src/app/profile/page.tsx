@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
+import { useToast } from "@/lib/useToast";
 // Products now come from Supabase — no mock imports
 import { getScanHistory, getScanCount, type ScanRecord } from "@/lib/scanHistory";
 
@@ -43,6 +44,7 @@ export default function ProfilePage() {
   const [language, setLanguage] = useState<string>(() => loadProfile().language ?? "English");
   const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
   const [scanCount, setScanCount] = useState(0);
+  const { showToast } = useToast();
 
   useEffect(() => {
     setScanHistory(getScanHistory());
@@ -260,6 +262,7 @@ export default function ProfilePage() {
               </div>
               <motion.button
                 whileTap={{ scale: 0.95 }}
+                onClick={() => showToast("Sift Pro is launching soon — we'll notify you!", "info")}
                 className="w-full py-2.5 rounded-xl text-sm font-bold"
                 style={{ background: "#FFFFFF", color: "#007AFF" }}
               >
