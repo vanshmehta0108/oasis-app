@@ -74,7 +74,6 @@ const jsonLd = {
   applicationCategory: "HealthApplication",
   operatingSystem: "Web",
   offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
-  aggregateRating: { "@type": "AggregateRating", ratingValue: "4.8", ratingCount: "1200", bestRating: "5" },
   author: { "@type": "Organization", name: "Sift Health" },
 };
 

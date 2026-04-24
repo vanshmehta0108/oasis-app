@@ -133,7 +133,11 @@ export default function Home() {
   if (checkingOnboarding) return null;
   if (showOnboarding) {
     return (
-      <Onboarding onComplete={() => { localStorage.setItem("oasis-onboarded", "true"); setShowOnboarding(false); }} />
+      <Onboarding onComplete={() => {
+        localStorage.setItem("oasis-onboarded", "true");
+        window.dispatchEvent(new Event("sift-onboarded"));
+        setShowOnboarding(false);
+      }} />
     );
   }
 

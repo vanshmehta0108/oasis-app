@@ -18,7 +18,20 @@ export function BottomNav() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    setVisible(!!localStorage.getItem("oasis-onboarded") && pathname !== "/scan");
+    const check = () => {
+      const onboarded = !!localStorage.getItem("oasis-onboarded");
+      setVisible(onboarded && !pathname.startsWith("/scan"));
+    };
+    check();
+    // Onboarding completion fires this custom event so the nav appears
+    // immediately, without requiring a reload.
+    window.addEventListener("sift-onboarded", check);
+    // Cross-tab sync: if another tab completes onboarding, mirror it here.
+    window.addEventListener("storage", check);
+    return () => {
+      window.removeEventListener("sift-onboarded", check);
+      window.removeEventListener("storage", check);
+    };
   }, [pathname]);
 
   if (!visible) return null;

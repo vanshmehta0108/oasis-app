@@ -11,7 +11,10 @@ import { Search, TrendingUp, Globe, Loader2, Database } from "lucide-react";
 import Link from "next/link";
 import { SkeletonSearchResults } from "@/components/Skeleton";
 
-const popularSearches = ["Maggi", "Bournvita", "Kurkure", "Sunscreen", "Baby food", "Atta"];
+// Hardcoded suggestion seeds — shown only on the blank empty state when
+// the user has no history yet. Labeled as "Try searching" so we never
+// misrepresent them as real popularity data.
+const searchSuggestions = ["Maggi", "Bournvita", "Kurkure", "Sunscreen", "Baby food", "Atta"];
 
 function mapOFFCategory(raw: string | undefined): string {
   if (!raw) return "Food";
@@ -220,10 +223,10 @@ function SearchContent() {
             <motion.div variants={fadeUp} className="w-full">
               <div className="flex items-center gap-2 mb-3 justify-center">
                 <TrendingUp size={14} style={{ color: "#007AFF" }} />
-                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#8E8E93" }}>Popular Searches</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#8E8E93" }}>Try Searching</span>
               </div>
               <div className="flex flex-wrap gap-2 justify-center">
-                {popularSearches.map((term) => (
+                {searchSuggestions.map((term) => (
                   <motion.button
                     key={term}
                     whileTap={{ scale: 0.95 }}
@@ -248,10 +251,14 @@ function SearchContent() {
           >
             <span className="text-5xl mb-3">😔</span>
             <p className="text-sm font-medium text-oasis-text mb-1">
-              No results for &ldquo;{query}&rdquo;
+              {isBrowsingCategory
+                ? `No products in ${category} yet`
+                : `No results for \u201C${query}\u201D`}
             </p>
             <p className="text-xs text-oasis-muted max-w-xs">
-              Try a different search term, or scan the product barcode.
+              {isBrowsingCategory
+                ? "Scan a product to add the first one to this category."
+                : "Try a different search term, or scan the product barcode."}
             </p>
             <Link
               href="/scan"
