@@ -50,8 +50,9 @@ function getScoreColor(score: number) {
   return "#FF3B30";
 }
 
-function validateFSSAI(license: string | null | undefined): "registered" | "invalid" | "unknown" {
-  if (!license) return "unknown";
+function validateFSSAI(license: string | null | undefined): "registered" | "not_found" | "invalid" | "unknown" {
+  if (license === null || license === undefined) return "unknown";
+  if (license === "FSSAI_NOT_FOUND") return "not_found";
   const clean = license.replace(/[\s\-]/g, "");
   return /^\d{14}$/.test(clean) ? "registered" : "invalid";
 }
@@ -110,11 +111,14 @@ const fadeUp = {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
+const FSSAI_SENTINEL = "FSSAI_NOT_FOUND";
+
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [product, setProduct] = useState<ProductData | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
+  const [fssaiLooking, setFssaiLooking] = useState(false);
   const { showToast } = useToast();
 
   const score = product?.safety_score ?? 0;
@@ -300,6 +304,30 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Auto-lookup FSSAI when not in DB
+  useEffect(() => {
+    if (!product || product.fssai_license !== null) return;
+    const barcode = id.startsWith("off-") ? id.replace("off-", "") : id.startsWith("web-") ? id.replace("web-", "") : id;
+    if (!barcode || barcode.startsWith("analyzed-") || barcode.startsWith("manual-")) return;
+    setFssaiLooking(true);
+    fetch("/api/fssai-lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: product.name, brand: product.brand, barcode }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setProduct((prev) =>
+            prev ? { ...prev, fssai_license: data.license ?? FSSAI_SENTINEL } : prev
+          );
+        }
+      })
+      .catch(console.error)
+      .finally(() => setFssaiLooking(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
+
   // ── Render states ──────────────────────────────────────────────────────────
 
   if (notFoundState) {
@@ -468,34 +496,64 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* FSSAI Compliance */}
         {(() => {
           const fssaiStatus = validateFSSAI(product.fssai_license);
+
+          if (fssaiStatus === "unknown" && fssaiLooking) {
+            return (
+              <motion.div variants={fadeUp} className="px-5 mb-4">
+                <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-oasis-card border border-oasis-border">
+                  <Loader2 size={18} className="text-oasis-muted animate-spin shrink-0" />
+                  <span className="text-sm text-oasis-muted">Checking FSSAI registration...</span>
+                </div>
+              </motion.div>
+            );
+          }
+
           if (fssaiStatus === "unknown") return null;
+
           const isRegistered = fssaiStatus === "registered";
+          const isNotFound = fssaiStatus === "not_found";
+
           return (
             <motion.div variants={fadeUp} className="px-5 mb-4">
               <div
                 className={`flex items-center gap-3 p-3.5 rounded-2xl border ${
                   isRegistered
                     ? "bg-[#F0FBF4] border-[#1E8040]/15"
+                    : isNotFound
+                    ? "bg-oasis-card border-oasis-border"
                     : "bg-[#FFF0EE] border-[#FF3B30]/15"
                 }`}
               >
                 {isRegistered ? (
                   <BadgeCheck size={20} className="text-[#1E8040] shrink-0" />
+                ) : isNotFound ? (
+                  <BadgeX size={20} className="text-oasis-muted shrink-0" />
                 ) : (
                   <BadgeX size={20} className="text-[#CC1010] shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
                   <span
-                    className={`text-sm font-bold ${isRegistered ? "text-[#1E8040]" : "text-[#CC1010]"}`}
+                    className={`text-sm font-bold ${
+                      isRegistered ? "text-[#1E8040]" : isNotFound ? "text-oasis-muted" : "text-[#CC1010]"
+                    }`}
                   >
-                    {isRegistered ? "FSSAI Registered" : "FSSAI License Invalid"}
+                    {isRegistered
+                      ? "FSSAI Registered"
+                      : isNotFound
+                      ? "FSSAI Not Verified"
+                      : "FSSAI License Invalid"}
                   </span>
                   {isRegistered && product.fssai_license && (
                     <p className="text-[10px] font-mono text-oasis-muted mt-0.5 truncate">
                       {product.fssai_license}
                     </p>
                   )}
-                  {!isRegistered && (
+                  {isNotFound && (
+                    <p className="text-[10px] text-oasis-muted mt-0.5">
+                      No FSSAI license found online — buy from verified retailers
+                    </p>
+                  )}
+                  {!isRegistered && !isNotFound && (
                     <p className="text-[10px] text-oasis-muted mt-0.5">
                       License format unrecognized — verify before purchasing
                     </p>

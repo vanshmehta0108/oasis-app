@@ -321,6 +321,36 @@ export async function analyzeLabel(base64Image: string): Promise<LabelExtraction
   return JSON.parse(text) as LabelExtraction;
 }
 
+export async function lookupFSSAIOnline(
+  productName: string,
+  brand: string
+): Promise<string | null> {
+  const client = getGenAI();
+  if (!client) return null;
+
+  try {
+    const model = client.getGenerativeModel({
+      model: MODEL,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ googleSearch: {} } as any],
+    });
+
+    const result = await model.generateContent(
+      `Find the FSSAI license number for this Indian product: "${productName}" by brand "${brand}". ` +
+      `Search foscos.fssai.gov.in or official product information. ` +
+      `The FSSAI license is a 14-digit number printed on Indian food/consumer product labels. ` +
+      `Reply with ONLY the 14-digit number, or "not_found" if unavailable.`
+    );
+
+    const text = result.response.text().trim();
+    const match = text.replace(/[\s\-]/g, "").match(/\d{14}/);
+    return match ? match[0] : null;
+  } catch (err) {
+    console.error("FSSAI online lookup error:", err);
+    return null;
+  }
+}
+
 export async function getPersonalizedWarnings(
   ingredients: string[],
   healthConditions: string[],
