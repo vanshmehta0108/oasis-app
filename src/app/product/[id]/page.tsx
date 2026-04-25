@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check, Flag, Sparkles, Package, Info, Bookmark, BookmarkCheck } from "lucide-react";
+import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check, Flag, Sparkles, Package, Info, Bookmark, BookmarkCheck, ChevronRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
@@ -14,6 +14,7 @@ import { getProductByBarcode as getDbProduct, getTopRatedInCategory } from "@/li
 import { ProductCardHorizontal } from "@/components/ProductCard";
 import type { Product } from "@/lib/mockData";
 import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
+import { supabase } from "@/lib/supabase";
 
 interface PersonalWarning {
   warning: string;
@@ -148,6 +149,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [fssaiLooking, setFssaiLooking] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
   const [personalLoading, setPersonalLoading] = useState(false);
+  const [showNutrition, setShowNutrition] = useState(false);
+  const [showOtherInfo, setShowOtherInfo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
   const {
@@ -615,9 +618,13 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       .then((data) => {
         if (gen !== loaderGen.current) return;
         if (data) {
+          const license = data.license ?? FSSAI_SENTINEL;
           setProduct((prev) =>
-            prev ? { ...prev, fssai_license: data.license ?? FSSAI_SENTINEL } : prev
+            prev ? { ...prev, fssai_license: license } : prev
           );
+          // Persist to DB so future visits skip the lookup.
+          // @ts-expect-error generated types miss fssai_license column
+          void supabase.from("products").update({ fssai_license: license }).eq("barcode", barcode);
         }
       })
       .catch((err) => {
@@ -951,6 +958,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               {inCompare ? "In compare — tap to remove" : "Add to compare"}
             </span>
           </motion.button>
+          {inCompare && (
+            <Link
+              href="/compare"
+              className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold"
+              style={{ color: "#007AFF" }}
+            >
+              View comparison ({userData.compareList.length}/{3})
+              <ChevronRight size={12} />
+            </Link>
+          )}
         </motion.div>
 
         {/* Summary card */}
@@ -1015,7 +1032,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                     {isRegistered
                       ? "FSSAI Registered"
                       : isNotFound
-                      ? "FSSAI Not Verified"
+                      ? "FSSAI Not Found Online"
                       : "FSSAI License Invalid"}
                   </span>
                   {isRegistered && product.fssai_license && (
@@ -1025,7 +1042,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   )}
                   {isNotFound && (
                     <p className="text-[10px] text-oasis-muted mt-0.5">
-                      No FSSAI license found online — buy from verified retailers
+                      Couldn&apos;t find a matching license in public databases — may still be compliant
                     </p>
                   )}
                   {!isRegistered && !isNotFound && (
@@ -1220,47 +1237,67 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           </motion.div>
         )}
 
-        {/* Nutrition Facts — structured from label extraction when available */}
+        {/* Nutrition Facts — collapsible */}
         {product.nutritional_info && typeof product.nutritional_info === "object" && Object.keys(product.nutritional_info).length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Nutrition Facts</h2>
-            <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              {Object.entries(product.nutritional_info)
-                .filter(([, v]) => v != null && v !== "")
-                .slice(0, 12)
-                .map(([key, value], i) => (
-                  <div key={key} className={`flex items-center justify-between px-4 py-3 ${i > 0 ? "border-t border-black/[0.04]" : ""}`}>
-                    <span className="text-[13px] text-black capitalize">{key.replace(/_/g, " ")}</span>
-                    <span className="text-[13px] font-semibold text-black tabular-nums">
-                      {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                    </span>
-                  </div>
-                ))}
-            </div>
+            <button
+              onClick={() => setShowNutrition((v) => !v)}
+              className="w-full flex items-center justify-between mb-3"
+            >
+              <h2 className="font-semibold text-[17px] text-oasis-text">Nutrition Facts</h2>
+              <motion.div animate={{ rotate: showNutrition ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                <ChevronDown size={18} className="text-oasis-muted" />
+              </motion.div>
+            </button>
+            {showNutrition && (
+              <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                {Object.entries(product.nutritional_info)
+                  .filter(([, v]) => v != null && v !== "")
+                  .slice(0, 12)
+                  .map(([key, value], i) => (
+                    <div key={key} className={`flex items-center justify-between px-4 py-3 ${i > 0 ? "border-t border-black/[0.04]" : ""}`}>
+                      <span className="text-[13px] text-black capitalize">{key.replace(/_/g, " ")}</span>
+                      <span className="text-[13px] font-semibold text-black tabular-nums">
+                        {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
           </motion.div>
         )}
 
-        {/* Other info — packaging, barcode, etc. */}
+        {/* Other info — collapsible */}
         <motion.div variants={fadeUp} className="px-5 mb-4">
-          <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Other info</h2>
-          <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-            {product.barcode && (
-              <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <Package size={14} className="text-oasis-muted" />
-                  <span className="text-[13px] text-black">Barcode</span>
+          <button
+            onClick={() => setShowOtherInfo((v) => !v)}
+            className="w-full flex items-center justify-between mb-3"
+          >
+            <h2 className="font-semibold text-[17px] text-oasis-text">More details</h2>
+            <motion.div animate={{ rotate: showOtherInfo ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown size={18} className="text-oasis-muted" />
+            </motion.div>
+          </button>
+          {showOtherInfo && (
+            <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+              {product.barcode && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <Package size={14} className="text-oasis-muted" />
+                    <span className="text-[13px] text-black">Barcode</span>
+                  </div>
+                  <span className="text-[12px] font-mono text-oasis-muted">{product.barcode}</span>
                 </div>
-                <span className="text-[12px] font-mono text-oasis-muted">{product.barcode}</span>
+              )}
+              <div className={`flex items-center justify-between px-4 py-3 ${product.barcode ? "border-t border-black/[0.04]" : ""}`}>
+                <div className="flex items-center gap-2.5">
+                  <Info size={14} className="text-oasis-muted" />
+                  <span className="text-[13px] text-black">Category</span>
+                </div>
+                <span className="text-[13px] font-semibold text-black capitalize">{product.category}</span>
               </div>
-            )}
-            <div className={`flex items-center justify-between px-4 py-3 ${product.barcode ? "border-t border-black/[0.04]" : ""}`}>
-              <div className="flex items-center gap-2.5">
-                <Info size={14} className="text-oasis-muted" />
-                <span className="text-[13px] text-black">Category</span>
-              </div>
-              <span className="text-[13px] font-semibold text-black capitalize">{product.category}</span>
             </div>
-          </div>
+          )}
         </motion.div>
 
         {/* Top rated in category — discovery */}

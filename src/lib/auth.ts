@@ -39,6 +39,36 @@ export async function signInWithGoogle(): Promise<{ ok: boolean; error?: string 
   return { ok: true };
 }
 
+// ── Email / password auth ─────────────────────────────────────────────────
+
+export async function signInWithEmail(
+  email: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string; needsConfirmation?: boolean }> {
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, needsConfirmation: !data.session };
+}
+
+export async function resetPassword(
+  email: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const redirectTo =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/auth/callback`
+      : undefined;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 // ── Sign out ──────────────────────────────────────────────────────────────
 
 export async function signOut(): Promise<void> {

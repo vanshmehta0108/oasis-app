@@ -7,7 +7,7 @@ import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useToast } from "@/lib/useToast";
 import { useUserData } from "@/lib/userData";
-import { signInWithGoogle, signOut, displayNameFor } from "@/lib/auth";
+import { signInWithGoogle, signOut, displayNameFor, signInWithEmail, signUpWithEmail, resetPassword } from "@/lib/auth";
 import { useUser } from "@/lib/useUser";
 
 const healthConditions = [
@@ -18,6 +18,165 @@ const healthConditions = [
   { name: "Heart Condition", icon: "❤️" },
   { name: "High BP", icon: "🩺" },
 ];
+
+function GoogleSVG() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+      <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+    </svg>
+  );
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const { showToast } = useToast();
+
+  async function handleGoogle() {
+    setLoading(true);
+    const { ok, error } = await signInWithGoogle();
+    if (!ok) { setLoading(false); showToast(error || "Sign-in failed", "error"); }
+  }
+
+  async function handleEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email || !password) return;
+    setLoading(true);
+    setMsg(null);
+    const result = mode === "signup"
+      ? await signUpWithEmail(email, password)
+      : await signInWithEmail(email, password);
+    setLoading(false);
+    if (!result.ok) {
+      setMsg({ text: result.error || "Something went wrong", ok: false });
+    } else if (mode === "signup") {
+      setMsg({ text: "Check your email to confirm your account, then sign in.", ok: true });
+    }
+  }
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email) return;
+    setLoading(true);
+    const result = await resetPassword(email);
+    setLoading(false);
+    setMsg(result.ok
+      ? { text: "Password reset link sent — check your email.", ok: true }
+      : { text: result.error || "Reset failed", ok: false });
+  }
+
+  return (
+    <div className="min-h-dvh flex flex-col items-center justify-center px-6" style={{ background: "#F2F2F7" }}>
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6" style={{ background: "#007AFF" }}>
+        <ShieldCheck size={28} color="white" />
+      </div>
+      <h1 className="text-[22px] font-bold text-black mb-1">
+        {mode === "reset" ? "Reset Password" : "Sign in to Sift"}
+      </h1>
+      <p className="text-sm text-center mb-8 max-w-xs" style={{ color: "#8E8E93" }}>
+        {mode === "reset"
+          ? "Enter your email and we'll send a reset link."
+          : "Save your scan history and health profile across devices."}
+      </p>
+
+      {mode !== "reset" && (
+        <>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleGoogle}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-white border border-black/[0.12] font-semibold text-black mb-4 disabled:opacity-60"
+            style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.08)", maxWidth: 380 }}
+          >
+            <GoogleSVG /> Sign in with Google
+          </motion.button>
+
+          <div className="flex items-center w-full mb-4" style={{ maxWidth: 380 }}>
+            <div className="flex-1 h-px bg-black/[0.08]" />
+            <span className="px-3 text-xs" style={{ color: "#8E8E93" }}>or</span>
+            <div className="flex-1 h-px bg-black/[0.08]" />
+          </div>
+        </>
+      )}
+
+      <form
+        onSubmit={mode === "reset" ? handleReset : handleEmail}
+        className="w-full space-y-3"
+        style={{ maxWidth: 380 }}
+      >
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="w-full px-4 py-3 rounded-xl bg-white border border-[#E5E5EA] text-sm text-black placeholder:text-[#8E8E93] focus:outline-none focus:border-[rgba(0,122,255,0.5)] transition-colors"
+        />
+        {mode !== "reset" && (
+          <input
+            type="password"
+            placeholder="Password (min. 6 characters)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            className="w-full px-4 py-3 rounded-xl bg-white border border-[#E5E5EA] text-sm text-black placeholder:text-[#8E8E93] focus:outline-none focus:border-[rgba(0,122,255,0.5)] transition-colors"
+          />
+        )}
+        {msg && (
+          <p className={`text-xs font-medium ${msg.ok ? "text-[#1E8040]" : "text-[#CC1010]"}`}>
+            {msg.text}
+          </p>
+        )}
+        <motion.button
+          type="submit"
+          whileTap={{ scale: 0.97 }}
+          disabled={loading}
+          className="w-full py-3.5 rounded-2xl font-semibold text-white text-sm disabled:opacity-60"
+          style={{ background: "#007AFF" }}
+        >
+          {loading ? "Please wait…" : mode === "signup" ? "Create Account" : mode === "reset" ? "Send Reset Link" : "Sign In"}
+        </motion.button>
+      </form>
+
+      <div className="mt-5 text-center space-y-3" style={{ maxWidth: 380 }}>
+        {mode !== "reset" && (
+          <button
+            onClick={() => { setMsg(null); setMode(mode === "signin" ? "signup" : "signin"); }}
+            className="text-sm font-medium block w-full"
+            style={{ color: "#007AFF" }}
+          >
+            {mode === "signin" ? "No account? Create one" : "Already have an account? Sign in"}
+          </button>
+        )}
+        {mode === "signin" && (
+          <button
+            onClick={() => { setMsg(null); setMode("reset"); }}
+            className="text-xs block w-full"
+            style={{ color: "#8E8E93" }}
+          >
+            Forgot password?
+          </button>
+        )}
+        {mode === "reset" && (
+          <button
+            onClick={() => { setMsg(null); setMode("signin"); }}
+            className="text-sm font-medium"
+            style={{ color: "#007AFF" }}
+          >
+            Back to sign in
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const stagger = {
   hidden: {},
@@ -33,6 +192,7 @@ export default function ProfilePage() {
   const { user, isAnonymous, authAvailable } = useUser();
   const { data: userData, ready, error, setProfile } = useUserData();
   const [allergyInput, setAllergyInput] = useState("");
+  const [allergyDropdown, setAllergyDropdown] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const { showToast } = useToast();
 
@@ -64,11 +224,20 @@ export default function ProfilePage() {
     void setProfile({ conditions: next });
   };
 
-  const addAllergy = () => {
-    const trimmed = allergyInput.trim();
+  const COMMON_ALLERGENS = ["Peanuts", "Milk", "Gluten", "Soy", "Eggs", "Tree Nuts", "Shellfish", "Fish", "Wheat", "Sulfites", "Sesame", "Mustard"];
+
+  const addAllergy = (value?: string) => {
+    const trimmed = (value ?? allergyInput).trim();
     if (!trimmed || allergies.includes(trimmed)) return;
     setAllergyInput("");
     void setProfile({ allergies: [...allergies, trimmed] });
+  };
+
+  const addFromDropdown = (value: string) => {
+    setAllergyDropdown("");
+    if (value && !allergies.includes(value)) {
+      void setProfile({ allergies: [...allergies, value] });
+    }
   };
 
   const removeAllergy = (a: string) => {
@@ -82,20 +251,8 @@ export default function ProfilePage() {
   const recentScans = scanHistory.slice(0, 5);
   const safeProducts = scanHistory.filter((p) => (p.score ?? 0) >= 70).length;
 
-  // Cloud mode required — show a clear setup-required state instead of a
-  // broken-looking page when anonymous auth isn't enabled yet.
   if (ready && error === "setup_required") {
-    return (
-      <div className="min-h-dvh flex flex-col items-center justify-center px-6 text-center" style={{ background: "#F2F2F7" }}>
-        <div className="w-16 h-16 rounded-full bg-[#007AFF]/10 flex items-center justify-center mb-4">
-          <User size={28} className="text-[#007AFF]" />
-        </div>
-        <h1 className="text-[18px] font-bold text-black mb-2">Cloud setup required</h1>
-        <p className="text-sm max-w-sm" style={{ color: "#8E8E93" }}>
-          Anonymous sign-ins aren&apos;t enabled on this deployment yet. See <code>docs/auth-setup.md</code> — it takes 15 minutes.
-        </p>
-      </div>
-    );
+    return <AuthScreen />;
   }
   if (ready && error === "migration_required") {
     return (
@@ -229,40 +386,60 @@ export default function ProfilePage() {
         {/* Allergies */}
         <motion.div variants={fadeUp} className="mb-5">
           <h3 className="text-sm font-semibold text-black mb-2">Allergies</h3>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {allergies.map((a) => (
-              <motion.span
-                key={a}
-                layout
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-400/10 border border-red-400/15 text-red-400 text-xs font-medium"
-              >
-                {a}
-                <button
-                  onClick={() => removeAllergy(a)}
-                  className="hover:bg-red-400/20 rounded-full p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-                  aria-label={`Remove ${a} allergy`}
+
+          {/* Current allergy chips */}
+          {allergies.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {allergies.map((a) => (
+                <motion.span
+                  key={a}
+                  layout
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-400/10 border border-red-400/15 text-red-400 text-xs font-medium"
                 >
-                  <X size={11} aria-hidden="true" />
-                </button>
-              </motion.span>
+                  {a}
+                  <button
+                    onClick={() => removeAllergy(a)}
+                    className="hover:bg-red-400/20 rounded-full p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                    aria-label={`Remove ${a} allergy`}
+                  >
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                </motion.span>
+              ))}
+            </div>
+          )}
+
+          {/* Common allergens dropdown */}
+          <select
+            value={allergyDropdown}
+            onChange={(e) => addFromDropdown(e.target.value)}
+            aria-label="Select a common allergen"
+            className="w-full px-3 py-2.5 rounded-xl bg-white border border-[#E5E5EA] text-sm text-black focus:outline-none focus:border-[rgba(0,122,255,0.4)] mb-2 appearance-none"
+            style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
+          >
+            <option value="">Select common allergen…</option>
+            {COMMON_ALLERGENS.filter((a) => !allergies.includes(a)).map((a) => (
+              <option key={a} value={a}>{a}</option>
             ))}
-          </div>
+          </select>
+
+          {/* Custom allergy input */}
           <div className="flex gap-2">
             <input
               type="text"
               value={allergyInput}
               onChange={(e) => setAllergyInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addAllergy()}
-              placeholder="Add allergy..."
-              aria-label="Type an allergy to add"
+              placeholder="Or type a custom allergy…"
+              aria-label="Type a custom allergy to add"
               className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#E5E5EA] text-xs text-black placeholder:text-[#8E8E93] focus:outline-none focus:border-[rgba(0,122,255,0.4)] focus:ring-1 focus:ring-[rgba(0,122,255,0.2)] transition-all"
             />
             <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={addAllergy}
+              onClick={() => addAllergy()}
               aria-label="Add allergy"
               className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue"
               style={{ background: "rgba(0,122,255,0.08)", border: "1px solid rgba(0,122,255,0.2)" }}

@@ -7,7 +7,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { ProductCard } from "@/components/ProductCard";
 import type { Product } from "@/lib/mockData";
 import { searchProducts as searchSupabase, getProductsByCategory } from "@/lib/db";
-import { Search, TrendingUp, Globe, Loader2, Database } from "lucide-react";
+import { Search, TrendingUp, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { SkeletonSearchResults } from "@/components/Skeleton";
 
@@ -150,7 +150,9 @@ function SearchContent() {
           const data = await res.json();
           if (gen !== searchGen.current) return;
           const mapped: OFFResult[] = (data.products || [])
-            .filter((p: { product_name?: string }) => p.product_name)
+            .filter((p: { product_name?: string; ingredients_text?: string; code?: string }) =>
+              p.product_name && p.code && p.ingredients_text && p.ingredients_text.trim().length > 10
+            )
             .map((p: { code: string; product_name: string; brands?: string; categories?: string; ingredients_text?: string; image_url?: string }): OFFResult => ({
               id: `off-${p.code}`,
               barcode: p.code,
@@ -279,16 +281,6 @@ function SearchContent() {
               <p className="text-[11px] text-oasis-muted">
                 {results.length} {isBrowsingCategory ? "product" : "result"}{results.length !== 1 ? "s" : ""}
               </p>
-              {dbResults.length > 0 && !isBrowsingCategory && (
-                <span className="flex items-center gap-1 text-[10px] text-emerald-400/70">
-                  <Database size={10} /> {dbResults.length} from Sift DB
-                </span>
-              )}
-              {uniqueOff.length > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-oasis-green/70">
-                  <Globe size={10} /> {uniqueOff.length} from Open Food Facts
-                </span>
-              )}
               {isLoading && <Loader2 size={12} className="text-oasis-green animate-spin" />}
             </motion.div>
             {results.map((p, i) => (

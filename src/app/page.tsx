@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion, useInView } from "framer-motion";
 import {
   Camera, ChevronRight, TrendingDown, Shield, ShieldAlert, Scale,
-  UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby, Home as HomeIcon, Package
+  UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby, Home as HomeIcon, Package, UserCircle2
 } from "lucide-react";
 import { ProductCard } from "@/components/ProductCard";
 import { ScoreRing } from "@/components/ScoreRing";
@@ -13,6 +13,7 @@ import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
 import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
 import { useUserData } from "@/lib/userData";
+import { useUser } from "@/lib/useUser";
 import { useRef, useEffect, useState } from "react";
 
 const stagger = {
@@ -101,7 +102,8 @@ const categoryMap: Record<string, string> = {
 };
 
 export default function Home() {
-  const { data: userData, ready: userReady, error: userError, markOnboarded } = useUserData();
+  const { data: userData, ready: userReady, markOnboarded } = useUserData();
+  const { isAnonymous } = useUser();
   const [trending, setTrending] = useState<Product[]>([]);
   const [worst, setWorst] = useState<Product[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<Product[]>([]);
@@ -130,10 +132,7 @@ export default function Home() {
   // Wait for the user profile to load before deciding whether to show
   // onboarding — otherwise returning visitors flash the onboarding UI.
   if (!userReady) return null;
-  // Skip onboarding when cloud storage isn't ready (SetupBanner explains
-  // what's missing). Showing it would loop forever because markOnboarded
-  // is a no-op without an authenticated session.
-  if (!userData.onboarded && !userError) {
+  if (!userData.onboarded) {
     return (
       <Onboarding onComplete={async () => {
         await markOnboarded();
@@ -157,10 +156,22 @@ export default function Home() {
       >
         {/* ── Hero ── */}
         <motion.div variants={fadeUp} className="px-4 pt-14 pb-6">
-          {/* Wordmark */}
-          <p className="text-[11px] font-bold tracking-[0.15em] uppercase mb-5" style={{ color: "#8E8E93" }}>
-            Sift — AI Food Safety
-          </p>
+          {/* Wordmark + sign-in pill */}
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[11px] font-bold tracking-[0.15em] uppercase" style={{ color: "#8E8E93" }}>
+              Sift — AI Food Safety
+            </p>
+            {isAnonymous && (
+              <Link
+                href="/profile"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#007AFF]/20 text-[11px] font-semibold"
+                style={{ color: "#007AFF", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+              >
+                <UserCircle2 size={12} />
+                Sign In
+              </Link>
+            )}
+          </div>
           <h1 className="text-[2.4rem] font-bold leading-[1.05] tracking-[-0.02em] text-black mb-3">
             Know what&apos;s really<br />
             <span style={{ color: "#007AFF" }}>in your food.</span>

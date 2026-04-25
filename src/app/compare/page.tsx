@@ -94,64 +94,74 @@ export default function ComparePage() {
           </motion.div>
         ) : (
           <div className="space-y-3">
-            {best && items.length > 1 && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="p-4 rounded-2xl bg-white border border-[#1E8040]/15 flex items-center gap-3"
-                style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}
-              >
-                <div className="w-10 h-10 rounded-full bg-[#F0FBF4] flex items-center justify-center shrink-0">
-                  <Scale size={18} className="text-[#1E8040]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#1E8040]">Best pick</p>
-                  <p className="text-sm font-semibold text-black truncate">{best.name}</p>
-                  <p className="text-xs text-oasis-muted">{best.brand} · {best.safety_score}/100 ({verdict(best.safety_score)})</p>
-                </div>
-              </motion.div>
-            )}
-
-            {items.map((item, i) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="relative rounded-2xl overflow-hidden border border-black/[0.06] bg-white"
-                style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
-              >
-                <div
-                  className="absolute inset-x-0 top-0 h-20 pointer-events-none"
-                  style={{ background: gradient(item.safety_score), opacity: 0.6 }}
-                />
-                <button
-                  onClick={() => void removeFromCompare(item.id)}
-                  aria-label={`Remove ${item.name} from compare`}
-                  className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-white border border-black/[0.08]"
+            {items.map((item, i) => {
+              const isBest = best?.id === item.id && items.length > 1;
+              const scoreColor = (item.safety_score ?? 0) >= 70 ? "#34C759" : (item.safety_score ?? 0) >= 50 ? "#FF9F0A" : "#FF3B30";
+              return (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className={`relative rounded-2xl overflow-hidden border bg-white ${isBest ? "border-[#1E8040]/30" : "border-black/[0.06]"}`}
+                  style={{ boxShadow: isBest ? "0 2px 12px rgba(30,128,64,0.10)" : "0 1px 3px rgba(0,0,0,0.06)" }}
                 >
-                  <X size={14} className="text-oasis-muted" />
-                </button>
-
-                <Link href={`/product/${item.id}`} className="relative block p-4">
-                  <div className="flex items-center gap-3">
-                    <ScoreRing score={item.safety_score} grade={item.grade} size="md" animate={false} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[15px] font-semibold text-black truncate">{item.name}</p>
-                      <p className="text-xs text-oasis-muted truncate">{item.brand}</p>
-                      <span className="inline-block text-[10px] px-2 py-0.5 mt-1.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] font-medium">
-                        {verdict(item.safety_score)}
-                      </span>
+                  <div
+                    className="absolute inset-x-0 top-0 h-20 pointer-events-none"
+                    style={{ background: gradient(item.safety_score), opacity: 0.6 }}
+                  />
+                  {isBest && (
+                    <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1E8040] text-white text-[10px] font-bold">
+                      ✓ Best pick
                     </div>
-                  </div>
-                  {item.summary && (
-                    <p className="text-xs text-oasis-text-secondary leading-relaxed mt-3 line-clamp-3">
-                      {item.summary}
-                    </p>
                   )}
-                </Link>
-              </motion.div>
-            ))}
+                  <button
+                    onClick={() => void removeFromCompare(item.id)}
+                    aria-label={`Remove ${item.name} from compare`}
+                    className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center bg-white border border-black/[0.08]"
+                  >
+                    <X size={14} className="text-oasis-muted" />
+                  </button>
+
+                  <Link href={`/product/${item.id}`} className="relative block p-4">
+                    <div className={`flex items-center gap-3 ${isBest ? "mt-4" : ""}`}>
+                      <ScoreRing score={item.safety_score} grade={item.grade} size="md" animate={false} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-semibold text-black truncate">{item.name}</p>
+                        <p className="text-xs text-oasis-muted truncate">{item.brand}</p>
+                        <span className="inline-block text-[10px] px-2 py-0.5 mt-1.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] font-medium">
+                          {verdict(item.safety_score)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Score bar */}
+                    <div className="mt-3 h-2 rounded-full bg-black/[0.06] overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.safety_score ?? 0}%` }}
+                        transition={{ duration: 0.7, delay: 0.1 + i * 0.1, ease: "easeOut" }}
+                        style={{ background: scoreColor }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[10px] text-oasis-muted">0</span>
+                      <span className="text-[10px] font-semibold tabular-nums" style={{ color: scoreColor }}>
+                        {item.safety_score ?? "?"}/100
+                      </span>
+                      <span className="text-[10px] text-oasis-muted">100</span>
+                    </div>
+
+                    {item.summary && (
+                      <p className="text-xs text-oasis-text-secondary leading-relaxed mt-3 line-clamp-2">
+                        {item.summary}
+                      </p>
+                    )}
+                  </Link>
+                </motion.div>
+              );
+            })}
 
             {items.length < LIMITS.COMPARE_MAX && (
               <Link

@@ -48,17 +48,30 @@ const riskConfig = {
   },
 };
 
+const SEVERITY: Record<string, number> = { danger: 0, warning: 1, caution: 2, safe: 3 };
+const INITIAL_VISIBLE = 5;
+
 export function IngredientList({ ingredients }: { ingredients: (IngredientAnalysis | { name: string; risk_level?: string; risk?: string; explanation: string })[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const sorted = [...ingredients.filter(Boolean)].sort((a, b) => {
+    const ra = ("risk" in a ? a.risk : (a as { risk_level?: string }).risk_level) ?? "caution";
+    const rb = ("risk" in b ? b.risk : (b as { risk_level?: string }).risk_level) ?? "caution";
+    return (SEVERITY[ra] ?? 2) - (SEVERITY[rb] ?? 2);
+  });
+
+  const visible = showAll ? sorted : sorted.slice(0, INITIAL_VISIBLE);
+  const hidden = sorted.length - INITIAL_VISIBLE;
 
   return (
     <div className="space-y-2" role="list" aria-label="Ingredient analysis">
-      {ingredients.filter(Boolean).map((ing, i) => {
+      {visible.map((ing, i) => {
         // Support both "risk" and "risk_level" field names (mockData vs AI response)
         const riskKey = (("risk" in ing ? ing.risk : (ing as { risk_level?: string }).risk_level) || "caution") as string;
         const cfg = riskConfig[riskKey as keyof typeof riskConfig] ?? riskConfig.caution;
         const Icon = cfg.icon;
-        const itemKey = `${ing.name}-${i}`; // index prevents duplicate-name key collisions
+        const itemKey = `${ing.name}-${i}`;
         const isOpen = expanded === itemKey;
 
         return (
@@ -114,6 +127,22 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
           </motion.button>
         );
       })}
+      {!showAll && hidden > 0 && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="w-full text-center text-xs font-semibold py-2.5 rounded-xl bg-white border border-black/[0.08] text-oasis-muted hover:text-oasis-text transition-colors"
+        >
+          Show {hidden} more ingredient{hidden !== 1 ? "s" : ""} →
+        </button>
+      )}
+      {showAll && sorted.length > INITIAL_VISIBLE && (
+        <button
+          onClick={() => setShowAll(false)}
+          className="w-full text-center text-xs font-semibold py-2.5 rounded-xl bg-white border border-black/[0.08] text-oasis-muted hover:text-oasis-text transition-colors"
+        >
+          Show less ↑
+        </button>
+      )}
     </div>
   );
 }

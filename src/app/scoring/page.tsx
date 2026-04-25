@@ -77,7 +77,7 @@ export default function ScoringPage() {
               <h2 className="text-[15px] font-semibold text-black">In one paragraph</h2>
             </div>
             <p className="text-[13px] leading-relaxed" style={{ color: "#3C3C43" }}>
-              We send the product&apos;s ingredient list and category to Google&apos;s Gemini 2.5 Flash model with a prompt loaded with FSSAI additive limits, WHO/ICMR dietary guidelines, and India-specific context (diabetes prevalence, lactose intolerance, vegetarian dietary norms). The model deducts points from 100 for each concerning ingredient based on a rubric below, adds bonuses for transparency, then we clamp to 0–100 and convert to a letter grade.
+              We send the product&apos;s ingredient list and category to our AI with a carefully tuned rubric: FSSAI additive limits, WHO/ICMR dietary guidelines, and India-specific context (diabetes prevalence, lactose intolerance, vegetarian dietary norms). Points are deducted from 100 for each concerning ingredient and added back for clean, transparent labels — then clamped to 0–100 and converted to a letter grade.
             </p>
           </motion.div>
 
@@ -107,7 +107,7 @@ export default function ScoringPage() {
           <motion.section variants={fadeUp}>
             <h2 className="text-[17px] font-semibold text-black mb-3">What goes in</h2>
             <div className="p-4 rounded-2xl bg-white border border-black/[0.06] space-y-3">
-              <InputRow icon={FileText} title="Ingredient list" body="Parsed from the product barcode lookup (Open Food Facts, our community DB) or extracted from a photo of the label using Gemini vision." />
+              <InputRow icon={FileText} title="Ingredient list" body="Retrieved from our product database or extracted from a photo of the ingredient label using AI vision. Community-submitted labels go through a moderation queue before being used in scoring." />
               <InputRow icon={Calculator} title="INS numbers + typical dose" body="Gemini identifies every additive by its INS/E number and compares against FSSAI's permitted limit for that category." />
               <InputRow icon={Globe} title="FSSAI registration" body="We look up the 14-digit FSSAI license online. Missing or invalid license deducts points and surfaces a 'FSSAI Not Verified' badge." />
               <InputRow icon={ShieldAlert} title="India-specific risk flags" body="Palm oil, high sodium/sugar, hidden non-veg (E120, gelatin, L-cysteine), lead in kajal — all weighted more heavily here than they would be in a Western-focused app." />
@@ -205,7 +205,7 @@ export default function ScoringPage() {
               <p>• ICMR-NIN RDA 2020 for the Indian population.</p>
               <p>• FSSAI 2022 ban on partially hydrogenated oils.</p>
               <p>• BIS IS 4707 for cosmetic ingredient standards.</p>
-              <p>• Open Food Facts and the product&apos;s own label as the ingredient source of truth.</p>
+              <p>• Product labels and our community-verified ingredient database as the ingredient source of truth.</p>
             </div>
           </motion.section>
 

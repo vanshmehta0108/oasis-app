@@ -168,10 +168,11 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     if (authLoading) return;
 
     if (!user) {
-      // Auth not configured (no anonymous sign-in). App must run in a
-      // "setup required" mode — reads return empty, writes no-op.
-      setData(EMPTY);
-      dataRef.current = EMPTY;
+      const localOnboarded =
+        typeof window !== "undefined" && localStorage.getItem("sift-onboarded") === "1";
+      const base = { ...EMPTY, onboarded: localOnboarded };
+      setData(base);
+      dataRef.current = base;
       userIdRef.current = null;
       setReady(true);
       setError(authAvailable ? null : "setup_required");
@@ -182,38 +183,84 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const load = async () => {
-      const { data: row, error: selErr } = await supabase
-        .from("user_profiles")
-        .select("health_conditions, allergies, language_preference, onboarded, scan_history, scan_count, recent_searches, compare_list, bookmarks")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Carry over the localStorage flag set during anonymous onboarding so
+      // that signing in with Google (new user_id) doesn't re-show onboarding.
+      const localOnboarded =
+        typeof window !== "undefined" && localStorage.getItem("sift-onboarded") === "1";
+
+      // Try the full query first (requires cloud-migration.sql to have been run).
+      // If extended columns don't exist (code 42703), fall back to basic columns
+      // so login always works even before the migration is applied.
+      let row: Row | null = null;
+      let fatalError = false;
+      {
+        const { data, error: selErr } = await supabase
+          .from("user_profiles")
+          .select("health_conditions, allergies, language_preference, onboarded, scan_history, scan_count, recent_searches, compare_list, bookmarks")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (selErr) {
+          if (selErr.code === "42703") {
+            // Extended columns not yet added — fall back to basic schema.
+            const { data: basic, error: basicErr } = await supabase
+              .from("user_profiles")
+              .select("health_conditions, allergies, language_preference")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (basicErr) { fatalError = true; } else { row = basic as Row | null; }
+          } else {
+            console.warn("user_profiles load failed:", selErr.message);
+            fatalError = true;
+          }
+        } else {
+          row = data as Row | null;
+        }
+      }
 
       if (cancelled) return;
 
-      if (selErr) {
-        // Most likely: user_profiles columns don't exist (migration not run).
-        console.warn("user_profiles load failed:", selErr.message);
+      if (fatalError) {
         setError("migration_required");
         setReady(true);
         return;
       }
 
       if (!row) {
-        // First time — create empty row so the rest of the app can update it.
-        const { error: insErr } = await supabase
-          .from("user_profiles")
-          // @ts-expect-error generated types miss new JSONB columns
-          .insert({
+        // First time for this user_id — create row, carrying over the
+        // localStorage flag so a returning user who just signed in isn't
+        // shown onboarding again.
+        // Try inserting with extended columns; if migration not yet run (42703),
+        // retry with only the basic columns that are guaranteed to exist.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const db = supabase.from("user_profiles") as unknown as any;
+        let { error: insErr } = await db.insert({
+          user_id: user.id,
+          display_name: user.user_metadata?.full_name || user.email || "You",
+          ...(localOnboarded && { onboarded: true }),
+        });
+        if (insErr?.code === "42703") {
+          ({ error: insErr } = await db.insert({
             user_id: user.id,
             display_name: user.user_metadata?.full_name || user.email || "You",
-          });
+          }));
+        }
         if (insErr && insErr.code !== "23505") { // 23505 = unique_violation on race
           console.warn("user_profiles insert failed:", insErr.message);
         }
-        setData(EMPTY);
-        dataRef.current = EMPTY;
+        const base = { ...EMPTY, onboarded: localOnboarded };
+        setData(base);
+        dataRef.current = base;
       } else {
         const parsed = rowToData(row as Row);
+        // DB row says not onboarded but this browser completed onboarding
+        // while anonymous — trust localStorage and sync it back to DB.
+        if (!parsed.onboarded && localOnboarded) {
+          parsed.onboarded = true;
+          // Best-effort — silently ignored if column doesn't exist yet
+          // @ts-expect-error generated types miss new JSONB columns
+          supabase.from("user_profiles").update({ onboarded: true }).eq("user_id", user.id).then(() => {}).catch(() => {});
+        }
         setData(parsed);
         dataRef.current = parsed;
       }
@@ -236,11 +283,12 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       const { next, dbPatch } = producer(prev);
       setData(next);
       dataRef.current = next;
+      // Upsert instead of update: if the profile row doesn't exist yet
+      // (e.g. insert failed silently during load), this still saves the data.
       const { error: updateErr } = await supabase
         .from("user_profiles")
         // @ts-expect-error generated types miss new JSONB columns
-        .update(dbPatch)
-        .eq("user_id", uid);
+        .upsert({ user_id: uid, display_name: "You", ...dbPatch }, { onConflict: "user_id" });
       if (updateErr) {
         // Revert on failure so UI stays consistent with server.
         setData(prev);
@@ -348,11 +396,20 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
 
   const markOnboarded = useCallback(async () => {
     if (dataRef.current.onboarded) return;
-    await mutate((prev) => ({
-      next: { ...prev, onboarded: true },
-      dbPatch: { onboarded: true },
-    }));
-  }, [mutate]);
+    // localStorage is the source of truth — set it first so any concurrent
+    // load() (triggered by auth-state changes) cannot revert onboarded to
+    // false before or during the DB write (which caused the onboarding loop).
+    if (typeof window !== "undefined") localStorage.setItem("sift-onboarded", "1");
+    // Update state immediately and never revert on DB failure.
+    // Using mutate() would revert the optimistic update if the write fails,
+    // which would flash the onboarding back. Instead, fire-and-forget.
+    const next = { ...dataRef.current, onboarded: true };
+    setData(next);
+    dataRef.current = next;
+    if (!userIdRef.current) return;
+    // @ts-expect-error generated types miss new JSONB columns
+    supabase.from("user_profiles").update({ onboarded: true }).eq("user_id", userIdRef.current).then(() => {}).catch(() => {});
+  }, []);
 
   const value = useMemo<UserDataContextValue>(() => ({
     data,
