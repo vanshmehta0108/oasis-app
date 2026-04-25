@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -13,12 +14,12 @@ import { signInWithGoogle, signOut, displayNameFor, signInWithEmail, signUpWithE
 import { useUser } from "@/lib/useUser";
 
 const healthConditions = [
-  { name: "Diabetic", icon: "💉" },
-  { name: "Pregnant", icon: "🤰" },
-  { name: "Lactose Intolerant", icon: "🥛" },
-  { name: "Gluten Sensitive", icon: "🌾" },
-  { name: "Heart Condition", icon: "❤️" },
-  { name: "High BP", icon: "🩺" },
+  { name: "Diabetic",          key: "condition_diabetic" as const, icon: "💉" },
+  { name: "Pregnant",          key: "condition_pregnant" as const, icon: "🤰" },
+  { name: "Lactose Intolerant",key: "condition_lactose"  as const, icon: "🥛" },
+  { name: "Gluten Sensitive",  key: "condition_gluten"   as const, icon: "🌾" },
+  { name: "Heart Condition",   key: "condition_heart"    as const, icon: "❤️" },
+  { name: "High BP",           key: "condition_bp"       as const, icon: "🩺" },
 ];
 
 function GoogleSVG() {
@@ -33,6 +34,7 @@ function GoogleSVG() {
 }
 
 function AuthScreen() {
+  const { language } = useLanguage();
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,7 +60,7 @@ function AuthScreen() {
     if (!result.ok) {
       setMsg({ text: result.error || "Something went wrong", ok: false });
     } else if (mode === "signup") {
-      setMsg({ text: "Check your email to confirm your account, then sign in.", ok: true });
+      setMsg({ text: t('check_email_confirm', language), ok: true });
     }
   }
 
@@ -69,7 +71,7 @@ function AuthScreen() {
     const result = await resetPassword(email);
     setLoading(false);
     setMsg(result.ok
-      ? { text: "Password reset link sent — check your email.", ok: true }
+      ? { text: t('password_reset_sent', language), ok: true }
       : { text: result.error || "Reset failed", ok: false });
   }
 
@@ -79,12 +81,12 @@ function AuthScreen() {
         <ShieldCheck size={28} color="white" />
       </div>
       <h1 className="text-[22px] font-bold text-black mb-1">
-        {mode === "reset" ? "Reset Password" : "Sign in to Sift"}
+        {mode === "reset" ? t('reset_password', language) : t('sign_in_to_sift', language)}
       </h1>
       <p className="text-sm text-center mb-8 max-w-xs" style={{ color: "#8E8E93" }}>
         {mode === "reset"
           ? "Enter your email and we'll send a reset link."
-          : "Save your scan history and health profile across devices."}
+          : t('sign_in_desc', language)}
       </p>
 
       {mode !== "reset" && (
@@ -96,7 +98,7 @@ function AuthScreen() {
             className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-white border border-black/[0.12] font-semibold text-black mb-4 disabled:opacity-60"
             style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.08)", maxWidth: 380 }}
           >
-            <GoogleSVG /> Sign in with Google
+            <GoogleSVG /> {t('sign_in_google', language)}
           </motion.button>
 
           <div className="flex items-center w-full mb-4" style={{ maxWidth: 380 }}>
@@ -123,7 +125,7 @@ function AuthScreen() {
         {mode !== "reset" && (
           <input
             type="password"
-            placeholder="Password (min. 6 characters)"
+            placeholder={t('password_placeholder', language)}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -143,7 +145,7 @@ function AuthScreen() {
           className="w-full py-3.5 rounded-2xl font-semibold text-white text-sm disabled:opacity-60"
           style={{ background: "#007AFF" }}
         >
-          {loading ? "Please wait…" : mode === "signup" ? "Create Account" : mode === "reset" ? "Send Reset Link" : "Sign In"}
+          {loading ? "Please wait…" : mode === "signup" ? t('create_account', language) : mode === "reset" ? t('send_reset', language) : t('sign_in', language)}
         </motion.button>
       </form>
 
@@ -154,7 +156,7 @@ function AuthScreen() {
             className="text-sm font-medium block w-full"
             style={{ color: "#007AFF" }}
           >
-            {mode === "signin" ? "No account? Create one" : "Already have an account? Sign in"}
+            {mode === "signin" ? t('no_account', language) : t('already_account', language)}
           </button>
         )}
         {mode === "signin" && (
@@ -193,7 +195,7 @@ const fadeUp = {
 export default function ProfilePage() {
   const { user, isAnonymous, authAvailable } = useUser();
   const { data: userData, ready, error, setProfile } = useUserData();
-  const { setLanguage: setLanguageContext } = useLanguage();
+  const { language, setLanguage: setLanguageContext } = useLanguage();
   const [allergyInput, setAllergyInput] = useState("");
   const [allergyDropdown, setAllergyDropdown] = useState("");
   const [signingIn, setSigningIn] = useState(false);
@@ -201,7 +203,7 @@ export default function ProfilePage() {
 
   const selectedConditions = userData.profile.conditions;
   const allergies = userData.profile.allergies;
-  const language = userData.profile.language;
+  const profileLanguage = userData.profile.language;
   const scanHistory = userData.scanHistory;
   const scanCount = userData.scanCount;
 
@@ -217,7 +219,7 @@ export default function ProfilePage() {
   async function handleSignOut() {
     if (!confirm("Sign out? You'll lose access to your cross-device history on this browser until you sign back in.")) return;
     await signOut();
-    showToast("Signed out", "info");
+    showToast(t('signed_out', language), "info");
   }
 
   const toggleCondition = (c: string) => {
@@ -264,9 +266,9 @@ export default function ProfilePage() {
         <div className="w-16 h-16 rounded-full bg-[#FF9F0A]/10 flex items-center justify-center mb-4">
           <User size={28} className="text-[#B87800]" />
         </div>
-        <h1 className="text-[18px] font-bold text-black mb-2">Database migration required</h1>
+        <h1 className="text-[18px] font-bold text-black mb-2">{t('migration_required', language)}</h1>
         <p className="text-sm max-w-sm" style={{ color: "#8E8E93" }}>
-          Run <code>docs/cloud-migration.sql</code> in the Supabase SQL editor to enable cloud profile + scan history.
+          {t('migration_desc', language)}
         </p>
       </div>
     );
@@ -301,7 +303,7 @@ export default function ProfilePage() {
             {user && !isAnonymous ? displayNameFor(user) : "Your Profile"}
           </h1>
           <span className="text-xs mt-1" style={{ color: "#8E8E93" }}>
-            {isAnonymous ? "Personalize your safety alerts" : user?.email || "Signed in"}
+            {isAnonymous ? t('personalise_alerts', language) : user?.email || "Signed in"}
           </span>
 
           {/* Account actions */}
@@ -319,7 +321,7 @@ export default function ProfilePage() {
                 <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
                 <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
               </svg>
-              {signingIn ? "Opening Google…" : "Sign in with Google"}
+              {signingIn ? t('opening_google', language) : t('sign_in_google', language)}
             </motion.button>
           )}
           {!authAvailable && (
@@ -335,7 +337,7 @@ export default function ProfilePage() {
               style={{ color: "#8E8E93" }}
             >
               <LogOut size={12} aria-hidden="true" />
-              Sign out
+              {t('sign_out', language)}
             </motion.button>
           )}
         </motion.div>
@@ -344,9 +346,9 @@ export default function ProfilePage() {
         <motion.div variants={fadeUp} className="mb-6">
           <div className="grid grid-cols-3 gap-2">
             {[
-              { icon: <ScanLine size={16} style={{ color: "#007AFF" }} />, value: scanCount, label: "Total Scans", color: "#007AFF" },
-              { icon: <ShieldCheck size={16} style={{ color: "#007AFF" }} />, value: scanHistory.length, label: "Checked", color: "#007AFF" },
-              { icon: <CheckCircle size={16} style={{ color: "#34C759" }} />, value: safeProducts, label: "Safe Picks", color: "#34C759" },
+              { icon: <ScanLine size={16} style={{ color: "#007AFF" }} />, value: scanCount, label: t('total_scans', language), color: "#007AFF" },
+              { icon: <ShieldCheck size={16} style={{ color: "#007AFF" }} />, value: scanHistory.length, label: t('checked', language), color: "#007AFF" },
+              { icon: <CheckCircle size={16} style={{ color: "#34C759" }} />, value: safeProducts, label: t('safe_picks', language), color: "#34C759" },
             ].map(({ icon, value, label, color }) => (
               <div key={label} className="flex flex-col items-center p-3 rounded-2xl bg-white" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
                 {icon}
@@ -361,7 +363,7 @@ export default function ProfilePage() {
         <motion.div variants={fadeUp} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
             <Heart size={15} style={{ color: "#007AFF" }} />
-            <h2 className="font-semibold text-[17px] text-black">Health Conditions</h2>
+            <h2 className="font-semibold text-[17px] text-black">{t('health_conditions', language)}</h2>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {healthConditions.map((c) => {
@@ -372,7 +374,7 @@ export default function ProfilePage() {
                   whileTap={{ scale: 0.95 }}
                   onClick={() => toggleCondition(c.name)}
                   aria-pressed={active}
-                  aria-label={`${c.name}${active ? " (selected)" : ""}`}
+                  aria-label={`${t(c.key, language)}${active ? " (selected)" : ""}`}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-left transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue"
                   style={active
                     ? { background: "rgba(0,122,255,0.08)", borderColor: "rgba(0,122,255,0.25)", color: "#007AFF" }
@@ -380,7 +382,7 @@ export default function ProfilePage() {
                   }
                 >
                   <span className="text-base">{c.icon}</span>
-                  {c.name}
+                  {t(c.key, language)}
                 </motion.button>
               );
             })}
@@ -389,7 +391,7 @@ export default function ProfilePage() {
 
         {/* Allergies */}
         <motion.div variants={fadeUp} className="mb-5">
-          <h3 className="text-sm font-semibold text-black mb-2">Allergies</h3>
+          <h3 className="text-sm font-semibold text-black mb-2">{t('allergies', language)}</h3>
 
           {/* Current allergy chips */}
           {allergies.length > 0 && (
@@ -457,7 +459,7 @@ export default function ProfilePage() {
         <motion.div variants={fadeUp} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
             <Globe size={15} style={{ color: "#007AFF" }} />
-            <h3 className="text-sm font-semibold text-black">Language</h3>
+            <h3 className="text-sm font-semibold text-black">{t('language_setting', language)}</h3>
           </div>
           <div className="flex gap-0 p-1 rounded-xl bg-white border border-[#E5E5EA]">
             {(["English", "Hindi"] as const).map((lang) => (
@@ -465,9 +467,9 @@ export default function ProfilePage() {
                 key={lang}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setLanguage(lang)}
-                aria-pressed={language === lang}
+                aria-pressed={profileLanguage === lang}
                 className="flex-1 px-4 py-2 rounded-lg text-xs font-medium transition-all"
-                style={language === lang
+                style={profileLanguage === lang
                   ? { background: "#007AFF", color: "#FFFFFF" }
                   : { color: "#8E8E93" }
                 }
@@ -483,7 +485,7 @@ export default function ProfilePage() {
           <motion.div variants={fadeUp} className="mb-5">
             <div className="flex items-center gap-2 mb-3">
               <Bookmark size={15} style={{ color: "#007AFF" }} />
-              <h2 className="font-semibold text-[17px] text-black">Saved Products</h2>
+              <h2 className="font-semibold text-[17px] text-black">{t('saved_products', language)}</h2>
               <span className="text-[11px]" style={{ color: "#8E8E93" }}>· {userData.bookmarks.length}</span>
             </div>
             <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
@@ -513,7 +515,7 @@ export default function ProfilePage() {
         <motion.div variants={fadeUp} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
             <History size={15} style={{ color: "#007AFF" }} />
-            <h2 className="font-semibold text-[17px] text-black">Scan History</h2>
+            <h2 className="font-semibold text-[17px] text-black">{t('scan_history', language)}</h2>
           </div>
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
             <div className="space-y-0">
@@ -550,9 +552,9 @@ export default function ProfilePage() {
               <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2" style={{ background: "rgba(255,255,255,0.2)", color: "#FFFFFF" }}>
                 Pro
               </span>
-              <h3 className="text-base font-bold text-white mb-1">Upgrade to Sift Pro</h3>
+              <h3 className="text-base font-bold text-white mb-1">{t('upgrade_pro', language)}</h3>
               <p className="text-xs leading-relaxed mb-3" style={{ color: "rgba(255,255,255,0.75)" }}>
-                Unlimited scans, photo analysis, personalized alerts, and family sharing.
+                {t('upgrade_desc', language)}
               </p>
               <div className="flex items-baseline gap-1 mb-3">
                 <span className="text-2xl font-bold text-white">&#8377;99</span>

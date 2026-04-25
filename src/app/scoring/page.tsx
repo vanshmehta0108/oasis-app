@@ -6,6 +6,8 @@ import {
   ArrowLeft, ShieldCheck, AlertTriangle, ShieldAlert,
   FileText, Brain, Globe, Calculator, CheckCircle2, XCircle,
 } from "lucide-react";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 const bands = [
   { range: "80 – 100", label: "Safe", color: "#1E8040", bg: "#F0FBF4", blurb: "Clean ingredient list, minimal processing, no concerning additives. Recommended." },
@@ -39,6 +41,8 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const fadeUp = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
 export default function ScoringPage() {
+  const { language } = useLanguage();
+
   return (
     <div className="min-h-dvh pb-24" style={{ background: "#F2F2F7" }}>
       <div className="max-w-lg mx-auto px-5 pt-14">
@@ -51,7 +55,7 @@ export default function ScoringPage() {
               className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08]"
             >
               <ArrowLeft size={16} aria-hidden="true" />
-              <span className="text-xs font-medium">Back</span>
+              <span className="text-xs font-medium">{t('back', language)}</span>
             </motion.div>
           </Link>
         </div>
@@ -64,7 +68,7 @@ export default function ScoringPage() {
         >
           {/* Hero */}
           <motion.div variants={fadeUp}>
-            <h1 className="text-[30px] font-bold text-black tracking-tight leading-tight">How we score</h1>
+            <h1 className="text-[30px] font-bold text-black tracking-tight leading-tight">{t('scoring_title', language)}</h1>
             <p className="text-sm mt-2 leading-relaxed" style={{ color: "#3C3C43" }}>
               Every product gets a single 0–100 safety score. This page explains exactly how that number is calculated, what it includes, and — honestly — what it doesn&apos;t.
             </p>
@@ -74,7 +78,7 @@ export default function ScoringPage() {
           <motion.div variants={fadeUp} className="p-4 rounded-2xl bg-white border border-black/[0.06]" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
             <div className="flex items-center gap-2 mb-2">
               <Brain size={16} className="text-[#007AFF]" />
-              <h2 className="text-[15px] font-semibold text-black">In one paragraph</h2>
+              <h2 className="text-[15px] font-semibold text-black">{t('scoring_in_paragraph', language)}</h2>
             </div>
             <p className="text-[13px] leading-relaxed" style={{ color: "#3C3C43" }}>
               We send the product&apos;s ingredient list and category to our AI with a carefully tuned rubric: FSSAI additive limits, WHO/ICMR dietary guidelines, and India-specific context (diabetes prevalence, lactose intolerance, vegetarian dietary norms). Points are deducted from 100 for each concerning ingredient and added back for clean, transparent labels — then clamped to 0–100 and converted to a letter grade.
@@ -83,7 +87,7 @@ export default function ScoringPage() {
 
           {/* Score bands */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-3">Score bands</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-3">{t('scoring_score_bands', language)}</h2>
             <div className="space-y-2">
               {bands.map((b) => (
                 <div
@@ -105,7 +109,7 @@ export default function ScoringPage() {
 
           {/* Inputs */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-3">What goes in</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-3">{t('scoring_inputs', language)}</h2>
             <div className="p-4 rounded-2xl bg-white border border-black/[0.06] space-y-3">
               <InputRow icon={FileText} title="Ingredient list" body="Retrieved from our product database or extracted from a photo of the ingredient label using AI vision. Community-submitted labels go through a moderation queue before being used in scoring." />
               <InputRow icon={Calculator} title="INS numbers + typical dose" body="Gemini identifies every additive by its INS/E number and compares against FSSAI's permitted limit for that category." />
@@ -116,7 +120,7 @@ export default function ScoringPage() {
 
           {/* Deductions */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-1">Penalties</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-1">{t('scoring_penalties', language)}</h2>
             <p className="text-[12px] mb-3" style={{ color: "#8E8E93" }}>
               Every product starts at 100 and loses points for each of these. Ranges reflect the model&apos;s judgment on severity within the category.
             </p>
@@ -138,7 +142,7 @@ export default function ScoringPage() {
 
           {/* Bonuses */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-1">Bonuses</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-1">{t('scoring_bonuses', language)}</h2>
             <p className="text-[12px] mb-3" style={{ color: "#8E8E93" }}>
               Products that are transparent and clean claw back some points.
             </p>
@@ -158,7 +162,7 @@ export default function ScoringPage() {
 
           {/* Personalization */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-1">Personalization</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-1">{t('scoring_personalization', language)}</h2>
             <p className="text-[12px] mb-3" style={{ color: "#8E8E93" }}>
               If you set health conditions and allergies in your Profile, a second pass checks each ingredient against your profile and surfaces a &ldquo;Warnings for You&rdquo; card above the generic summary. The base score doesn&apos;t change — we never show you a different 0–100 than we&apos;d show anyone else — but the warnings are yours.
             </p>
@@ -174,7 +178,7 @@ export default function ScoringPage() {
 
           {/* What we don't do */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-1">What the score doesn&apos;t include</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-1">{t('scoring_limitations', language)}</h2>
             <p className="text-[12px] mb-3" style={{ color: "#8E8E93" }}>
               We&apos;d rather be honest about limits than pretend the score covers everything.
             </p>
@@ -195,7 +199,7 @@ export default function ScoringPage() {
 
           {/* Sources */}
           <motion.section variants={fadeUp}>
-            <h2 className="text-[17px] font-semibold text-black mb-1">Sources</h2>
+            <h2 className="text-[17px] font-semibold text-black mb-1">{t('scoring_sources', language)}</h2>
             <p className="text-[12px] mb-3" style={{ color: "#8E8E93" }}>
               The rubric the AI follows is loaded from these.
             </p>
@@ -212,7 +216,7 @@ export default function ScoringPage() {
           {/* Disagreement */}
           <motion.section variants={fadeUp}>
             <div className="p-4 rounded-2xl bg-[#007AFF]/08 border border-[#007AFF]/20">
-              <h2 className="text-[15px] font-semibold text-black mb-1">Disagree with a score?</h2>
+              <h2 className="text-[15px] font-semibold text-black mb-1">{t('scoring_disagree', language)}</h2>
               <p className="text-[12px] leading-relaxed mb-3" style={{ color: "#3C3C43" }}>
                 Tap &ldquo;Report an issue&rdquo; on any product page. We read every report and re-run the analysis when the feedback is specific (wrong ingredient, outdated label, missed certification).
               </p>
@@ -220,7 +224,7 @@ export default function ScoringPage() {
                 href="/scan"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#007AFF] text-white text-[13px] font-semibold"
               >
-                Scan a product
+                {t('scan_a_product', language)}
               </Link>
             </div>
           </motion.section>

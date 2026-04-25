@@ -13,9 +13,6 @@ import { SkeletonSearchResults } from "@/components/Skeleton";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
 
-// Hardcoded suggestion seeds — shown only on the blank empty state when
-// the user has no history yet. Labeled as "Try searching" so we never
-// misrepresent them as real popularity data.
 const searchSuggestions = ["Maggi", "Bournvita", "Kurkure", "Sunscreen", "Baby food", "Atta"];
 
 function mapOFFCategory(raw: string | undefined): string {
@@ -90,9 +87,6 @@ function SearchContent() {
   const handleSearch = useCallback((q: string) => setQuery(q), []);
   const handleCategory = useCallback((c: string) => setCategory(c), []);
 
-  // Category browse — load all products in category when no search query.
-  // Generation counter guards against stale responses when the user switches
-  // categories faster than the DB responds.
   const browseGen = useRef(0);
   useEffect(() => {
     if (query.length >= 2 || category === "All") return;
@@ -102,7 +96,7 @@ function SearchContent() {
     setOffResults([]);
     getProductsByCategory(category)
       .then((rows) => {
-        if (gen !== browseGen.current) return; // stale
+        if (gen !== browseGen.current) return;
         setDbResults(rows.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
       })
       .catch(() => {
@@ -115,7 +109,6 @@ function SearchContent() {
       });
   }, [category, query]);
 
-  // Search Supabase + Open Food Facts with debounce
   const searchGen = useRef(0);
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -133,7 +126,6 @@ function SearchContent() {
       setDbLoading(true);
       setOffLoading(true);
 
-      // Search Supabase (our DB)
       try {
         const supaResults = await searchSupabase(query, category === "All" ? undefined : category);
         if (gen !== searchGen.current) return;
@@ -145,7 +137,6 @@ function SearchContent() {
         if (gen === searchGen.current) setDbLoading(false);
       }
 
-      // Search Open Food Facts
       try {
         const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags=en:india&json=1&page_size=10&fields=code,product_name,brands,categories,ingredients_text,image_url`;
         const res = await fetch(url, { signal: controller.signal });
@@ -171,7 +162,7 @@ function SearchContent() {
           setOffResults(mapped);
         }
       } catch {
-        // ignore abort/network errors — stale request is already discarded
+        // ignore abort/network errors
       } finally {
         if (gen === searchGen.current) setOffLoading(false);
       }
@@ -182,7 +173,6 @@ function SearchContent() {
     };
   }, [query, category]);
 
-  // Combine results — DB first, then OFF (excluding duplicates by barcode)
   const dbBarcodes = new Set(dbResults.map((p) => p.barcode));
   const uniqueOff = offResults.filter((p) => !dbBarcodes.has(p.barcode));
   const results: Product[] = [...dbResults, ...uniqueOff as unknown as Product[]];
@@ -222,13 +212,15 @@ function SearchContent() {
               <span className="text-4xl">🔍</span>
             </motion.div>
             <motion.p variants={fadeUp} className="text-[14px] max-w-xs mb-6" style={{ color: "#8E8E93" }}>
-              Search for any product or brand to see its safety analysis
+              {t('search_empty_state', language)}
             </motion.p>
 
             <motion.div variants={fadeUp} className="w-full">
               <div className="flex items-center gap-2 mb-3 justify-center">
                 <TrendingUp size={14} style={{ color: "#007AFF" }} />
-                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#8E8E93" }}>Try Searching</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#8E8E93" }}>
+                  {t('try_searching', language)}
+                </span>
               </div>
               <div className="flex flex-wrap gap-2 justify-center">
                 {searchSuggestions.map((term) => (
@@ -257,20 +249,20 @@ function SearchContent() {
             <span className="text-5xl mb-3">😔</span>
             <p className="text-sm font-medium text-oasis-text mb-1">
               {isBrowsingCategory
-                ? `No products in ${category} yet`
+                ? t('no_products_in_category', language)
                 : `${t('no_results', language)} "${query}"`}
             </p>
             <p className="text-xs text-oasis-muted max-w-xs">
               {isBrowsingCategory
-                ? "Scan a product to add the first one to this category."
-                : "Try a different search term, or scan the product barcode."}
+                ? t('scan_to_add', language)
+                : t('try_different', language)}
             </p>
             <Link
               href="/scan"
               className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-oasis-green text-oasis-black text-sm font-semibold"
             >
               <Search size={14} aria-hidden="true" />
-              Scan Instead
+              {t('scan_instead', language)}
             </Link>
           </motion.div>
         ) : (
@@ -282,7 +274,9 @@ function SearchContent() {
           >
             <motion.div variants={fadeUp} className="flex items-center gap-2 mb-1">
               <p className="text-[11px] text-oasis-muted">
-                {results.length} {isBrowsingCategory ? "product" : "result"}{results.length !== 1 ? "s" : ""}
+                {results.length} {results.length !== 1
+                  ? (isBrowsingCategory ? t('products', language) : t('results', language))
+                  : (isBrowsingCategory ? t('product', language) : t('result', language))}
               </p>
               {isLoading && <Loader2 size={12} className="text-oasis-green animate-spin" />}
             </motion.div>

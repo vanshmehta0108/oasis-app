@@ -7,6 +7,7 @@ import { PackageX, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import { Scanner } from "@/components/Scanner";
 import Link from "next/link";
 import { useUserData } from "@/lib/userData";
+import { t } from "@/lib/i18n";
 
 // Map the app's stored language value to the API's lang param.
 function apiLang(language: "English" | "Hindi"): "en" | "hi" {
@@ -43,14 +44,14 @@ export default function ScanPage() {
   const lang = apiLang(userData.profile.language);
   const [state, setState] = useState<ScanState>("scanning");
   const [scannedBarcode, setScannedBarcode] = useState("");
-  const [loadingLabel, setLoadingLabel] = useState("Looking Up Product...");
+  const [loadingLabel, setLoadingLabel] = useState(t('looking_up', lang));
   const [loadingNote, setLoadingNote] = useState("");
 
   const handleScan = useCallback(async (barcode: string) => {
     if (navigator.vibrate) navigator.vibrate(60);
     setScannedBarcode(barcode);
     setState("looking-up");
-    setLoadingLabel("Looking Up Product...");
+    setLoadingLabel(t('looking_up', lang));
     setLoadingNote(`Barcode: ${barcode}`);
 
     try {
@@ -70,7 +71,7 @@ export default function ScanPage() {
       // Always compute a score on the spot if we have ingredients
       if (data.needs_analysis && product.ingredients?.length > 0) {
         setState("analyzing");
-        setLoadingLabel("Analysing Ingredients...");
+        setLoadingLabel(t('analysing', lang));
         setLoadingNote("AI is scoring each ingredient for safety");
 
         try {
@@ -126,7 +127,7 @@ export default function ScanPage() {
 
   const handlePhoto = async (base64: string) => {
     setState("analyzing-photo");
-    setLoadingLabel("Reading Ingredient Label...");
+    setLoadingLabel(t('analysing_label', lang));
     setLoadingNote("AI is extracting and scoring ingredients");
     try {
       const res = await fetch("/api/analyze", {
@@ -183,7 +184,7 @@ export default function ScanPage() {
             }}
           >
             <ArrowLeft size={16} className="text-white" aria-hidden="true" />
-            <span className="text-xs font-medium text-white">Back</span>
+            <span className="text-xs font-medium text-white">{t('back', lang)}</span>
           </motion.div>
         </Link>
       </div>
@@ -251,12 +252,12 @@ export default function ScanPage() {
             >
               <PackageX size={36} className="text-oasis-muted" />
             </motion.div>
-            <h2 className="font-semibold text-[18px] text-oasis-text">Product Not Found</h2>
+            <h2 className="font-semibold text-[18px] text-oasis-text">{t('product_not_found', lang)}</h2>
             <p className="text-sm text-oasis-muted text-center leading-relaxed max-w-xs">
               {scannedBarcode && (
                 <>Barcode <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> isn&apos;t in our database. </>
               )}
-              Photograph the ingredient label and our AI will score it instantly.
+              {t('photo_prompt', lang)}
             </p>
 
             <div className="flex gap-3 mt-2">
@@ -265,7 +266,7 @@ export default function ScanPage() {
                 onClick={() => setState("scanning")}
                 className="px-5 py-2.5 rounded-full border border-oasis-border text-sm font-medium text-oasis-text"
               >
-                Scan Again
+                {t('scan_again', lang)}
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -287,7 +288,7 @@ export default function ScanPage() {
                 className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-oasis-green text-oasis-black text-sm font-bold pulse-glow"
               >
                 <Camera size={16} />
-                Photograph Label
+                {t('photograph_label', lang)}
               </motion.button>
             </div>
           </motion.div>

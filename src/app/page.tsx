@@ -14,6 +14,8 @@ import type { Product } from "@/lib/mockData";
 import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
 import { useUserData } from "@/lib/userData";
 import { useUser } from "@/lib/useUser";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 import { useRef, useEffect, useState } from "react";
 
 const stagger = {
@@ -49,7 +51,6 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
   return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
 }
 
-// Lucide icons for categories — no more emojis
 const categoryIconMap: Record<string, { Icon: React.ElementType; bg: string; color: string }> = {
   Food:      { Icon: UtensilsCrossed, bg: "#FFF3E8", color: "#FF6B00" },
   Beverages: { Icon: Coffee,          bg: "#EBF3FF", color: "#007AFF" },
@@ -58,24 +59,6 @@ const categoryIconMap: Record<string, { Icon: React.ElementType; bg: string; col
   Baby:      { Icon: Baby,            bg: "#FFF0F5", color: "#FF2D78" },
   Household: { Icon: HomeIcon,        bg: "#F0FBF4", color: "#1E8040" },
 };
-
-// Fallback icon for unknown categories
-function CategoryIcon({ category, size = 18 }: { category: string; size?: number }) {
-  const cfg = categoryIconMap[category];
-  if (!cfg) {
-    return (
-      <div className="flex items-center justify-center w-10 h-10 rounded-[10px] shrink-0" style={{ background: "#F2F2F7" }}>
-        <Package size={size} color="#8E8E93" />
-      </div>
-    );
-  }
-  const { Icon, bg, color } = cfg;
-  return (
-    <div className="flex items-center justify-center w-10 h-10 rounded-[10px] shrink-0" style={{ background: bg }}>
-      <Icon size={size} color={color} />
-    </div>
-  );
-}
 
 function mapDbProduct(p: Record<string, unknown>): Product {
   const analysis = p.analysis as Record<string, unknown> | null;
@@ -95,7 +78,6 @@ function mapDbProduct(p: Record<string, unknown>): Product {
   };
 }
 
-// Normalize DB category keys to display names
 const categoryMap: Record<string, string> = {
   food: "Food", beverage: "Beverages", snack: "Snacks",
   skincare: "Skincare", baby_food: "Baby", household: "Household",
@@ -104,6 +86,7 @@ const categoryMap: Record<string, string> = {
 export default function Home() {
   const { data: userData, ready: userReady, markOnboarded } = useUserData();
   const { isAnonymous } = useUser();
+  const { language } = useLanguage();
   const [trending, setTrending] = useState<Product[]>([]);
   const [worst, setWorst] = useState<Product[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<Product[]>([]);
@@ -129,8 +112,6 @@ export default function Home() {
     getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
   }, []);
 
-  // Wait for the user profile to load before deciding whether to show
-  // onboarding — otherwise returning visitors flash the onboarding UI.
   if (!userReady) return null;
   if (!userData.onboarded) {
     return (
@@ -156,7 +137,6 @@ export default function Home() {
       >
         {/* ── Hero ── */}
         <motion.div variants={fadeUp} className="px-4 pt-14 pb-6">
-          {/* Wordmark + sign-in pill */}
           <div className="flex items-center justify-between mb-5">
             <p className="text-[11px] font-bold tracking-[0.15em] uppercase" style={{ color: "#8E8E93" }}>
               Sift — AI Food Safety
@@ -168,16 +148,20 @@ export default function Home() {
                 style={{ color: "#007AFF", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
               >
                 <UserCircle2 size={12} />
-                Sign In
+                {t('sign_in', language)}
               </Link>
             )}
           </div>
           <h1 className="text-[2.4rem] font-bold leading-[1.05] tracking-[-0.02em] text-black mb-3">
-            Know what&apos;s really<br />
-            <span style={{ color: "#007AFF" }}>in your food.</span>
+            {language === 'hi' ? (
+              <span style={{ color: "#007AFF" }}>{t('hero_title', language)}</span>
+            ) : (
+              <>Know what&apos;s really<br />
+              <span style={{ color: "#007AFF" }}>in your food.</span></>
+            )}
           </h1>
           <p className="text-[15px] leading-relaxed mb-6" style={{ color: "#6D6D72" }}>
-            Scan any Indian product barcode for instant AI safety analysis and ingredient breakdown.
+            {t('hero_subtitle', language)}
           </p>
 
           {/* Scan CTA */}
@@ -191,7 +175,7 @@ export default function Home() {
               }}
             >
               <Camera size={20} strokeWidth={2} />
-              Scan a Product
+              {t('scan_a_product', language)}
             </motion.div>
           </Link>
 
@@ -204,7 +188,7 @@ export default function Home() {
                 className="flex items-center justify-center gap-2 w-full mt-3 py-3 rounded-2xl bg-white border border-[#007AFF]/20 text-[#007AFF] font-semibold text-sm"
               >
                 <Scale size={16} />
-                Compare {compareCount} {compareCount === 1 ? "product" : "products"}
+                {t('compare', language)} {compareCount} {compareCount === 1 ? t('product', language) : t('products', language)}
                 <ChevronRight size={14} />
               </motion.div>
             </Link>
@@ -216,9 +200,9 @@ export default function Home() {
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
             <div className="grid grid-cols-3">
               {[
-                { label: "Products Analyzed", value: <AnimatedCounter target={productCount || 0} />, color: "#007AFF", border: true },
-                { label: "Flagged Unsafe",    value: <AnimatedCounter target={flaggedCount || 0} />,  color: "#FF3B30", border: true },
-                { label: "Total Scans",       value: <AnimatedCounter target={scanCount} suffix="+" />, color: "#1C1C1E", border: false },
+                { label: t('products_analyzed', language), value: <AnimatedCounter target={productCount || 0} />, color: "#007AFF", border: true },
+                { label: t('flagged_unsafe', language),    value: <AnimatedCounter target={flaggedCount || 0} />,  color: "#FF3B30", border: true },
+                { label: t('total_scans', language),       value: <AnimatedCounter target={scanCount} suffix="+" />, color: "#1C1C1E", border: false },
               ].map(({ label, value, color, border }) => (
                 <div
                   key={label}
@@ -237,9 +221,9 @@ export default function Home() {
         {trending.length > 0 && (
           <motion.div variants={fadeUp} className="mb-8">
             <div className="flex items-center justify-between px-4 mb-3">
-              <h2 className="text-[17px] font-semibold text-black">Trending Scans</h2>
+              <h2 className="text-[17px] font-semibold text-black">{t('trending_scans', language)}</h2>
               <Link href="/search" className="flex items-center gap-0.5 text-[13px] font-medium" style={{ color: "#007AFF" }}>
-                See all <ChevronRight size={14} />
+                {t('see_all', language)} <ChevronRight size={14} />
               </Link>
             </div>
             <div className="flex gap-3 overflow-x-auto hide-scrollbar scroll-snap-x pb-1 pl-4 pr-4">
@@ -260,7 +244,6 @@ export default function Home() {
                         className="w-[138px] rounded-2xl bg-white overflow-hidden"
                         style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}
                       >
-                        {/* Color header */}
                         <div
                           className="h-[52px] flex items-center justify-center"
                           style={{ background: catCfg?.bg || "#F2F2F7" }}
@@ -295,7 +278,7 @@ export default function Home() {
               <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(255,59,48,0.1)" }}>
                 <TrendingDown size={11} style={{ color: "#FF3B30" }} />
               </div>
-              <h2 className="text-[17px] font-semibold text-black">Worst Rated This Week</h2>
+              <h2 className="text-[17px] font-semibold text-black">{t('worst_rated', language)}</h2>
             </div>
             <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
               {worst.map((p, i) => {
@@ -333,7 +316,7 @@ export default function Home() {
 
         {/* ── Categories ── */}
         <motion.div variants={fadeUp} className="px-4 mb-8">
-          <h2 className="text-[17px] font-semibold text-black mb-3">Browse by Category</h2>
+          <h2 className="text-[17px] font-semibold text-black mb-3">{t('browse_by_category', language)}</h2>
           <div className="grid grid-cols-3 gap-2.5">
             {displayCategories.map((cat, i) => {
               const cfg = categoryIconMap[cat.name];
@@ -358,7 +341,7 @@ export default function Home() {
                     )}
                     <div className="text-center">
                       <p className="text-[12px] font-semibold text-black">{cat.name}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "#8E8E93" }}>{cat.count} items</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#8E8E93" }}>{cat.count} {t('items', language)}</p>
                     </div>
                   </motion.div>
                 </Link>
@@ -374,7 +357,7 @@ export default function Home() {
               <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "rgba(0,122,255,0.1)" }}>
                 <Shield size={11} style={{ color: "#007AFF" }} />
               </div>
-              <h2 className="text-[17px] font-semibold text-black">Recently Added</h2>
+              <h2 className="text-[17px] font-semibold text-black">{t('recently_added', language)}</h2>
             </div>
             <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
               {recentlyAdded.map((p, i) => (
@@ -390,9 +373,9 @@ export default function Home() {
             <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(0,122,255,0.08)" }}>
               <ShieldAlert size={28} style={{ color: "#007AFF" }} />
             </div>
-            <h2 className="text-[18px] font-semibold text-black mb-2">Start Scanning</h2>
+            <h2 className="text-[18px] font-semibold text-black mb-2">{t('start_scanning', language)}</h2>
             <p className="text-[14px] leading-relaxed max-w-xs mx-auto" style={{ color: "#8E8E93" }}>
-              Scan your first product barcode to build your safety database.
+              {t('start_scanning_desc', language)}
             </p>
           </motion.div>
         )}

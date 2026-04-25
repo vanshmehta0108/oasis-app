@@ -4,16 +4,18 @@ import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Plus, X } from "lucide-react";
 import { useUserData } from "@/lib/userData";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t, type Language } from "@/lib/i18n";
 
 const HEALTH_CONDITIONS = [
-  { id: "diabetic",  label: "Diabetic",           emoji: "💉" },
-  { id: "pregnant",  label: "Pregnant",            emoji: "🤰" },
-  { id: "lactose",   label: "Lactose Intolerant",  emoji: "🥛" },
-  { id: "gluten",    label: "Gluten Sensitive",     emoji: "🌾" },
-  { id: "heart",     label: "Heart Condition",      emoji: "❤️" },
-  { id: "bp",        label: "High BP",              emoji: "🩺" },
-  { id: "thyroid",   label: "Thyroid",              emoji: "🦋" },
-  { id: "pcod",      label: "PCOD / PCOS",          emoji: "🩷" },
+  { id: "diabetic",  label: "Diabetic",           key: "condition_diabetic" as const, emoji: "💉" },
+  { id: "pregnant",  label: "Pregnant",            key: "condition_pregnant" as const, emoji: "🤰" },
+  { id: "lactose",   label: "Lactose Intolerant",  key: "condition_lactose"  as const, emoji: "🥛" },
+  { id: "gluten",    label: "Gluten Sensitive",     key: "condition_gluten"   as const, emoji: "🌾" },
+  { id: "heart",     label: "Heart Condition",      key: "condition_heart"    as const, emoji: "❤️" },
+  { id: "bp",        label: "High BP",              key: "condition_bp"       as const, emoji: "🩺" },
+  { id: "thyroid",   label: "Thyroid",              key: "condition_thyroid"  as const, emoji: "🦋" },
+  { id: "pcod",      label: "PCOD / PCOS",          key: "condition_pcod"     as const, emoji: "🩷" },
 ] as const;
 
 const COMMON_ALLERGIES = ["Peanuts", "Milk", "Gluten", "Soy", "Eggs", "Tree Nuts", "Shellfish", "Sulfites"] as const;
@@ -47,6 +49,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void | Promise<vo
   const [customAllergy, setCustomAllergy] = useState("");
   const [saving, setSaving] = useState(false);
   const { setProfile } = useUserData();
+  const { language } = useLanguage();
   const totalSteps = 4;
 
   const goNext = useCallback(() => { setDirection(1); setStep((s) => Math.min(s + 1, totalSteps - 1)); }, []);
@@ -83,7 +86,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void | Promise<vo
       {/* Skip */}
       <div className="flex justify-end px-5 pt-[max(1rem,env(safe-area-inset-top))]">
         <button onClick={skip} className="text-[14px] font-medium" style={{ color: "#007AFF" }}>
-          Skip
+          {t('skip', language)}
         </button>
       </div>
 
@@ -100,10 +103,10 @@ export function Onboarding({ onComplete }: { onComplete: () => void | Promise<vo
             transition={{ type: "spring", stiffness: 340, damping: 30 }}
             className="w-full max-w-sm px-6"
           >
-            {step === 0 && <StepWelcome onNext={goNext} />}
-            {step === 1 && <StepHealth conditions={conditions} onToggle={(id) => setConditions((p) => p.includes(id) ? p.filter((c) => c !== id) : [...p, id])} onNext={goNext} />}
-            {step === 2 && <StepAllergies allergies={allergies} onToggle={(n) => setAllergies((p) => p.includes(n) ? p.filter((a) => a !== n) : [...p, n])} customAllergy={customAllergy} onCustomChange={setCustomAllergy} onAddCustom={() => { const t = customAllergy.trim(); if (t && !allergies.includes(t)) { setAllergies((p) => [...p, t]); setCustomAllergy(""); } }} onNext={goNext} />}
-            {step === 3 && <StepReady conditions={conditions} allergies={allergies} onFinish={finish} />}
+            {step === 0 && <StepWelcome onNext={goNext} language={language} />}
+            {step === 1 && <StepHealth conditions={conditions} onToggle={(id) => setConditions((p) => p.includes(id) ? p.filter((c) => c !== id) : [...p, id])} onNext={goNext} language={language} />}
+            {step === 2 && <StepAllergies allergies={allergies} onToggle={(n) => setAllergies((p) => p.includes(n) ? p.filter((a) => a !== n) : [...p, n])} customAllergy={customAllergy} onCustomChange={setCustomAllergy} onAddCustom={() => { const trimmed = customAllergy.trim(); if (trimmed && !allergies.includes(trimmed)) { setAllergies((p) => [...p, trimmed]); setCustomAllergy(""); } }} onNext={goNext} language={language} />}
+            {step === 3 && <StepReady conditions={conditions} allergies={allergies} onFinish={finish} language={language} />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -117,7 +120,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void | Promise<vo
 }
 
 /* ── Welcome ── */
-function StepWelcome({ onNext }: { onNext: () => void }) {
+function StepWelcome({ onNext, language }: { onNext: () => void; language: Language }) {
   return (
     <div className="text-center">
       <motion.div
@@ -136,7 +139,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         transition={{ delay: 0.2, duration: 0.45 }}
         className="text-[32px] font-bold text-black tracking-tight mb-3"
       >
-        Welcome to Sift
+        {t('welcome_to_sift', language)}
       </motion.h1>
 
       <motion.p
@@ -146,7 +149,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         className="text-[16px] leading-relaxed mb-1"
         style={{ color: "#3C3C43" }}
       >
-        Know what&apos;s really in your food.
+        {t('hero_title', language)}
       </motion.p>
 
       <motion.p
@@ -156,7 +159,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         className="text-[14px] mb-12"
         style={{ color: "#8E8E93" }}
       >
-        India&apos;s AI-powered ingredient scanner
+        {t('onboarding_subtitle', language)}
       </motion.p>
 
       <motion.button
@@ -168,7 +171,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         className="w-full flex items-center justify-center gap-2 py-[15px] rounded-2xl text-white font-semibold text-[16px]"
         style={{ background: "#007AFF" }}
       >
-        Get Started
+        {t('get_started', language)}
         <ChevronRight size={18} strokeWidth={2.5} />
       </motion.button>
     </div>
@@ -176,12 +179,12 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 }
 
 /* ── Health ── */
-function StepHealth({ conditions, onToggle, onNext }: { conditions: string[]; onToggle: (id: string) => void; onNext: () => void }) {
+function StepHealth({ conditions, onToggle, onNext, language }: { conditions: string[]; onToggle: (id: string) => void; onNext: () => void; language: Language }) {
   return (
     <div>
-      <h2 className="text-[26px] font-bold text-black text-center mb-1.5 tracking-tight">What matters to you?</h2>
+      <h2 className="text-[26px] font-bold text-black text-center mb-1.5 tracking-tight">{t('health_question', language)}</h2>
       <p className="text-[14px] text-center mb-6" style={{ color: "#8E8E93" }}>
-        Select any health conditions for personalised warnings.
+        {t('health_question_desc', language)}
       </p>
 
       <div className="grid grid-cols-2 gap-2.5 mb-8">
@@ -201,29 +204,29 @@ function StepHealth({ conditions, onToggle, onNext }: { conditions: string[]; on
               }}
             >
               <span className="text-xl">{c.emoji}</span>
-              <span className="text-[13px] font-medium">{c.label}</span>
+              <span className="text-[13px] font-medium">{t(c.key, language)}</span>
             </motion.button>
           );
         })}
       </div>
 
-      <CTAButton label="Next" onPress={onNext} />
-      <SkipLink onPress={onNext} />
+      <CTAButton label={t('next', language)} onPress={onNext} />
+      <SkipLink label={t('skip', language)} onPress={onNext} />
     </div>
   );
 }
 
 /* ── Allergies ── */
-function StepAllergies({ allergies, onToggle, customAllergy, onCustomChange, onAddCustom, onNext }: {
+function StepAllergies({ allergies, onToggle, customAllergy, onCustomChange, onAddCustom, onNext, language }: {
   allergies: string[]; onToggle: (n: string) => void;
   customAllergy: string; onCustomChange: (v: string) => void;
-  onAddCustom: () => void; onNext: () => void;
+  onAddCustom: () => void; onNext: () => void; language: Language;
 }) {
   return (
     <div>
-      <h2 className="text-[26px] font-bold text-black text-center mb-1.5 tracking-tight">Any allergies?</h2>
+      <h2 className="text-[26px] font-bold text-black text-center mb-1.5 tracking-tight">{t('allergies_question', language)}</h2>
       <p className="text-[14px] text-center mb-6" style={{ color: "#8E8E93" }}>
-        We&apos;ll flag products containing these ingredients.
+        {t('allergies_question_desc', language)}
       </p>
 
       <div className="flex flex-wrap gap-2 justify-center mb-5">
@@ -286,14 +289,14 @@ function StepAllergies({ allergies, onToggle, customAllergy, onCustomChange, onA
         </motion.button>
       </div>
 
-      <CTAButton label="Next" onPress={onNext} />
-      <SkipLink onPress={onNext} />
+      <CTAButton label={t('next', language)} onPress={onNext} />
+      <SkipLink label={t('skip', language)} onPress={onNext} />
     </div>
   );
 }
 
 /* ── Ready ── */
-function StepReady({ conditions, allergies, onFinish }: { conditions: string[]; allergies: string[]; onFinish: () => void }) {
+function StepReady({ conditions, allergies, onFinish, language }: { conditions: string[]; allergies: string[]; onFinish: () => void; language: Language }) {
   return (
     <div className="text-center">
       <motion.div
@@ -314,7 +317,7 @@ function StepReady({ conditions, allergies, onFinish }: { conditions: string[]; 
         transition={{ delay: 0.3 }}
         className="text-[28px] font-bold text-black tracking-tight mb-2"
       >
-        You&apos;re all set!
+        {t('all_set', language)}
       </motion.h2>
 
       <motion.p
@@ -324,7 +327,7 @@ function StepReady({ conditions, allergies, onFinish }: { conditions: string[]; 
         className="text-[14px] leading-relaxed mb-8 max-w-[260px] mx-auto"
         style={{ color: "#8E8E93" }}
       >
-        Sift will warn you about ingredients that affect your health.
+        {t('all_set_desc', language)}
       </motion.p>
 
       {(conditions.length > 0 || allergies.length > 0) && (
@@ -343,7 +346,7 @@ function StepReady({ conditions, allergies, onFinish }: { conditions: string[]; 
                   const c = HEALTH_CONDITIONS.find((h) => h.id === id);
                   return c ? (
                     <span key={id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-medium" style={{ background: "#EBF3FF", color: "#007AFF" }}>
-                      {c.emoji} {c.label}
+                      {c.emoji} {t(c.key, language)}
                     </span>
                   ) : null;
                 })}
@@ -366,7 +369,7 @@ function StepReady({ conditions, allergies, onFinish }: { conditions: string[]; 
       )}
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-        <CTAButton label="Start Scanning" onPress={onFinish} />
+        <CTAButton label={t('start_scanning_btn', language)} onPress={onFinish} />
       </motion.div>
     </div>
   );
@@ -387,10 +390,10 @@ function CTAButton({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
-function SkipLink({ onPress }: { onPress: () => void }) {
+function SkipLink({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <button onClick={onPress} className="w-full mt-3 py-2 text-[14px] font-medium" style={{ color: "#8E8E93" }}>
-      Skip for now
+      {label}
     </button>
   );
 }

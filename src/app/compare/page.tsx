@@ -5,6 +5,8 @@ import { ArrowLeft, X, Scale, Plus } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useUserData, LIMITS, type CompareItem } from "@/lib/userData";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t, type Language } from "@/lib/i18n";
 
 function gradient(score: number | null): string {
   if (score == null) return "linear-gradient(135deg, #F2F2F7, #E5E5EA)";
@@ -14,16 +16,17 @@ function gradient(score: number | null): string {
   return "linear-gradient(135deg, #FFF0EE, #FFCFC9)";
 }
 
-function verdict(score: number | null): string {
-  if (score == null) return "Not scored";
-  if (score >= 75) return "Safe";
-  if (score >= 55) return "Moderate";
-  if (score >= 35) return "Concerning";
-  return "Unsafe";
+function verdict(score: number | null, lang: Language): string {
+  if (score == null) return t('not_scored', lang);
+  if (score >= 75) return t('safe', lang);
+  if (score >= 55) return t('grade_b', lang);
+  if (score >= 35) return t('grade_c', lang);
+  return t('grade_d', lang);
 }
 
 export default function ComparePage() {
   const { data, ready, removeFromCompare, clearCompare } = useUserData();
+  const { language } = useLanguage();
   const items = data.compareList;
 
   const best = items.reduce<CompareItem | null>((acc, cur) => {
@@ -45,13 +48,13 @@ export default function ComparePage() {
               className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08]"
             >
               <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
-              <span className="text-xs font-medium text-oasis-text">Back</span>
+              <span className="text-xs font-medium text-oasis-text">{t('back', language)}</span>
             </motion.div>
           </Link>
         </div>
 
         <div className="flex items-center justify-between mb-1">
-          <h1 className="text-[28px] font-bold text-black tracking-tight">Compare</h1>
+          <h1 className="text-[28px] font-bold text-black tracking-tight">{t('compare_title', language)}</h1>
           {items.length > 0 && (
             <button
               onClick={() => {
@@ -59,12 +62,12 @@ export default function ComparePage() {
               }}
               className="text-xs font-medium text-oasis-muted"
             >
-              Clear all
+              {t('clear_all', language)}
             </button>
           )}
         </div>
         <p className="text-xs text-oasis-muted mb-6">
-          Side-by-side safety comparison — up to {LIMITS.COMPARE_MAX} products.
+          {t('compare_subtitle', language)} — up to {LIMITS.COMPARE_MAX} products.
         </p>
 
         {!ready ? (
@@ -80,16 +83,16 @@ export default function ComparePage() {
             <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ background: "#F2F2F7" }}>
               <Scale size={32} className="text-oasis-muted" />
             </div>
-            <p className="text-sm font-medium text-oasis-text mb-2">Nothing to compare yet</p>
+            <p className="text-sm font-medium text-oasis-text mb-2">{t('nothing_to_compare', language)}</p>
             <p className="text-xs text-oasis-muted max-w-xs mb-5">
-              Open any product and tap &ldquo;Add to compare&rdquo; to stack it against others.
+              {t('nothing_to_compare_desc', language)}
             </p>
             <Link
               href="/search"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#007AFF] text-white text-sm font-semibold"
             >
               <Plus size={14} />
-              Browse products
+              {t('browse_products', language)}
             </Link>
           </motion.div>
         ) : (
@@ -112,7 +115,7 @@ export default function ComparePage() {
                   />
                   {isBest && (
                     <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1E8040] text-white text-[10px] font-bold">
-                      ✓ Best pick
+                      ✓ {t('best_pick', language)}
                     </div>
                   )}
                   <button
@@ -130,7 +133,7 @@ export default function ComparePage() {
                         <p className="text-[15px] font-semibold text-black truncate">{item.name}</p>
                         <p className="text-xs text-oasis-muted truncate">{item.brand}</p>
                         <span className="inline-block text-[10px] px-2 py-0.5 mt-1.5 rounded-full bg-[#007AFF]/10 text-[#007AFF] font-medium">
-                          {verdict(item.safety_score)}
+                          {verdict(item.safety_score, language)}
                         </span>
                       </div>
                     </div>
@@ -169,7 +172,7 @@ export default function ComparePage() {
                 className="flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-oasis-border text-sm font-medium text-oasis-muted"
               >
                 <Plus size={16} />
-                Add another product
+                {t('add_another_product', language)}
               </Link>
             )}
           </div>
