@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key";
+const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co").trim();
+const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key").trim();
 
 // Single shared client for the whole app. Auth options only matter on the
 // client; server-side (API routes) use the same client without a session,

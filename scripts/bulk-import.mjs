@@ -216,12 +216,13 @@ async function processSource(source, sb, cp) {
     try { p = JSON.parse(line); }
     catch { continue; }
 
-    // Must be tagged for India
-    if (!p.countries_tags?.includes('en:india')) continue;
-
     const barcode = p.code?.toString().trim();
     const name    = (p.product_name || p.generic_name || '').trim();
     if (!barcode || !name) continue;
+
+    // Must be tagged for India OR have an Indian barcode (GS1 prefix 890)
+    const isIndia = p.countries_tags?.includes('en:india') || barcode.startsWith('890');
+    if (!isIndia) continue;
 
     const brand = (p.brands || p.brand_owner || 'Unknown').split(',')[0].trim().slice(0, 255);
     const ingredients = (p.ingredients_text || '')

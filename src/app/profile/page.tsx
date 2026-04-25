@@ -1,5 +1,7 @@
 "use client";
 
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle, LogOut, Bookmark } from "lucide-react";
@@ -191,6 +193,7 @@ const fadeUp = {
 export default function ProfilePage() {
   const { user, isAnonymous, authAvailable } = useUser();
   const { data: userData, ready, error, setProfile } = useUserData();
+  const { setLanguage: setLanguageContext } = useLanguage();
   const [allergyInput, setAllergyInput] = useState("");
   const [allergyDropdown, setAllergyDropdown] = useState("");
   const [signingIn, setSigningIn] = useState(false);
@@ -246,6 +249,7 @@ export default function ProfilePage() {
 
   const setLanguage = (lang: "English" | "Hindi") => {
     void setProfile({ language: lang });
+    setLanguageContext(lang === "English" ? "en" : "hi");
   };
 
   const recentScans = scanHistory.slice(0, 5);

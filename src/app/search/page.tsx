@@ -10,6 +10,8 @@ import { searchProducts as searchSupabase, getProductsByCategory } from "@/lib/d
 import { Search, TrendingUp, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { SkeletonSearchResults } from "@/components/Skeleton";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 // Hardcoded suggestion seeds — shown only on the blank empty state when
 // the user has no history yet. Labeled as "Try searching" so we never
@@ -75,6 +77,7 @@ function mapDbToProduct(p: Record<string, unknown>): Product {
 
 function SearchContent() {
   const searchParams = useSearchParams();
+  const { language } = useLanguage();
   const initialCategory = searchParams.get("category") || "All";
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory);
@@ -194,7 +197,7 @@ function SearchContent() {
         animate={{ opacity: 1, y: 0 }}
         className="text-[28px] font-bold text-black tracking-tight mb-4"
       >
-        {isBrowsingCategory ? category : "Search"}
+        {isBrowsingCategory ? category : t('search', language)}
       </motion.h1>
 
       <SearchBar
@@ -255,7 +258,7 @@ function SearchContent() {
             <p className="text-sm font-medium text-oasis-text mb-1">
               {isBrowsingCategory
                 ? `No products in ${category} yet`
-                : `No results for \u201C${query}\u201D`}
+                : `${t('no_results', language)} "${query}"`}
             </p>
             <p className="text-xs text-oasis-muted max-w-xs">
               {isBrowsingCategory

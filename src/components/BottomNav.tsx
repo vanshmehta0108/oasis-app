@@ -5,16 +5,19 @@ import Link from "next/link";
 import { Home, Camera, Search, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { useUserData } from "@/lib/userData";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 const tabs = [
-  { href: "/",        icon: Home,   label: "Home"    },
-  { href: "/search",  icon: Search, label: "Search"  },
-  { href: "/scan",    icon: Camera, label: "Scan",   featured: true },
-  { href: "/profile", icon: User,   label: "Profile" },
+  { href: "/",        icon: Home,   labelKey: "home"    as const },
+  { href: "/search",  icon: Search, labelKey: "search"  as const },
+  { href: "/scan",    icon: Camera, labelKey: "scan"    as const, featured: true },
+  { href: "/profile", icon: User,   labelKey: "profile" as const },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { language } = useLanguage();
   const { data: userData, ready, error } = useUserData();
 
   // Hide until the cloud state is known, hide during onboarding, hide on
@@ -51,7 +54,7 @@ export function BottomNav() {
                 key={tab.href}
                 href={tab.href}
                 className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue rounded-full mx-1"
-                aria-label="Scan a product"
+                aria-label={t('scan', language)}
                 aria-current={active ? "page" : undefined}
               >
                 <motion.div
@@ -74,7 +77,7 @@ export function BottomNav() {
               key={tab.href}
               href={tab.href}
               className="relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sift-blue rounded-xl"
-              aria-label={tab.label}
+              aria-label={t(tab.labelKey, language)}
               aria-current={active ? "page" : undefined}
             >
               <motion.div
@@ -94,7 +97,7 @@ export function BottomNav() {
                   style={{ color: active ? "#007AFF" : "#8E8E93" }}
                   aria-hidden="true"
                 >
-                  {tab.label}
+                  {t(tab.labelKey, language)}
                 </span>
               </motion.div>
             </Link>

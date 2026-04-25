@@ -15,6 +15,8 @@ import { ProductCardHorizontal } from "@/components/ProductCard";
 import type { Product } from "@/lib/mockData";
 import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 interface PersonalWarning {
   warning: string;
@@ -75,12 +77,6 @@ function hasCleanIngredients(ingredients: string[]): boolean {
   return true;
 }
 
-function validateFSSAI(license: string | null | undefined): "registered" | "not_found" | "invalid" | "unknown" {
-  if (license === null || license === undefined) return "unknown";
-  if (license === "FSSAI_NOT_FOUND") return "not_found";
-  const clean = license.replace(/[\s\-]/g, "");
-  return /^\d{14}$/.test(clean) ? "registered" : "invalid";
-}
 
 function mapAnalysisJson(analysis: Record<string, unknown>): ProductData["analysis"] {
   const rawIngredients = (analysis.ingredients as Array<{
@@ -138,15 +134,12 @@ const fadeUp = {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-const FSSAI_SENTINEL = "FSSAI_NOT_FOUND";
-
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [product, setProduct] = useState<ProductData | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [labelScanning, setLabelScanning] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
-  const [fssaiLooking, setFssaiLooking] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
   const [personalLoading, setPersonalLoading] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
@@ -161,6 +154,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     toggleBookmark,
   } = useUserData();
 
+  const { language } = useLanguage();
   const inCompare = userData.compareList.some((c) => c.id === (product?.id ?? ""));
   const isBookmarked = userData.bookmarks.some((b) => b.id === (product?.id ?? ""));
   const lang: "en" | "hi" = userData.profile.language === "Hindi" ? "hi" : "en";
@@ -179,7 +173,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     const list = product?.analysis?.ingredients ?? [];
     let harmful = 0; let beneficial = 0;
     for (const ing of list) {
-      if (ing.risk === "danger" || ing.risk === "warning") harmful++;
+      if (["danger", "warning", "caution"].includes(ing.risk)) harmful++;
       else if (ing.risk === "safe") beneficial++;
     }
     return { harmful, beneficial };
@@ -599,43 +593,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.analysis?.summary, lang]);
 
-  // Auto-lookup FSSAI when not in DB
-  useEffect(() => {
-    if (!product || product.fssai_license !== null) return;
-    const barcode = id.startsWith("off-") ? id.replace("off-", "") : id.startsWith("web-") ? id.replace("web-", "") : id;
-    if (!barcode || barcode.startsWith("analyzed-") || barcode.startsWith("manual-")) return;
-
-    const controller = new AbortController();
-    const gen = loaderGen.current;
-    setFssaiLooking(true);
-    fetch("/api/fssai-lookup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: product.name, brand: product.brand, barcode }),
-      signal: controller.signal,
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (gen !== loaderGen.current) return;
-        if (data) {
-          const license = data.license ?? FSSAI_SENTINEL;
-          setProduct((prev) =>
-            prev ? { ...prev, fssai_license: license } : prev
-          );
-          // Persist to DB so future visits skip the lookup.
-          // @ts-expect-error generated types miss fssai_license column
-          void supabase.from("products").update({ fssai_license: license }).eq("barcode", barcode);
-        }
-      })
-      .catch((err) => {
-        if (err?.name !== "AbortError") console.error(err);
-      })
-      .finally(() => {
-        if (gen === loaderGen.current) setFssaiLooking(false);
-      });
-    return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product?.id]);
 
   // Fetch top-rated products in the same category for the recommendation
   // strip at the bottom. Excludes the current product.
@@ -747,7 +704,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08] focus-visible:ring-2 focus-visible:ring-oasis-green"
           >
             <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
-            <span className="text-xs font-medium text-oasis-text">Back</span>
+            <span className="text-xs font-medium text-oasis-text">{t('back', language)}</span>
           </motion.div>
         </Link>
       </div>
@@ -878,7 +835,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             <div className="rounded-2xl bg-white border border-black/[0.06] overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
               <div className="flex items-center gap-3 px-4 py-3">
                 <AlertTriangle size={15} className="text-[#CC1010] shrink-0" />
-                <span className="text-[13px] text-black flex-1">Harmful substances</span>
+                <span className="text-[13px] text-black flex-1">{t('harmful_substances', language)}</span>
                 <span
                   className="inline-flex items-center justify-center min-w-[22px] h-[22px] rounded-full text-[12px] font-bold text-white tabular-nums px-2"
                   style={{ background: ingredientCounts.harmful === 0 ? "#1E8040" : "#CC1010" }}
@@ -889,7 +846,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <div className="h-px bg-black/[0.04] mx-4" />
               <div className="flex items-center gap-3 px-4 py-3">
                 <Leaf size={15} className="text-[#1E8040] shrink-0" />
-                <span className="text-[13px] text-black flex-1">Beneficial ingredients</span>
+                <span className="text-[13px] text-black flex-1">{t('beneficial_ingredients', language)}</span>
                 <span
                   className="inline-flex items-center justify-center min-w-[22px] h-[22px] rounded-full text-[12px] font-bold text-white tabular-nums px-2"
                   style={{ background: ingredientCounts.beneficial > 0 ? "#1E8040" : "#8E8E93" }}
@@ -934,7 +891,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white border border-black/[0.08] active:bg-[#F2F2F7] transition-colors"
             >
               <Share2 size={15} className="text-oasis-green" />
-              <span className="text-sm font-medium text-oasis-text">Share</span>
+              <span className="text-sm font-medium text-oasis-text">{t('share', language)}</span>
             </motion.button>
           </div>
 
@@ -955,7 +912,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               <Scale size={15} className="text-oasis-text" />
             )}
             <span className={`text-sm font-medium ${inCompare ? "text-[#007AFF]" : "text-oasis-text"}`}>
-              {inCompare ? "In compare — tap to remove" : "Add to compare"}
+              {inCompare ? "In compare — tap to remove" : t('add_to_compare', language)}
             </span>
           </motion.button>
           {inCompare && (
@@ -976,7 +933,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             <div className={`flex items-start gap-3 p-4 rounded-2xl ${level.bg} border border-black/[0.06] border-l-[3px] ${level.border}`}>
               <ShieldAlert size={20} className={`${level.color} shrink-0 mt-0.5`} />
               <div>
-                <span className={`text-sm font-bold ${level.color}`}>Overall: {level.label}</span>
+                <span className={`text-sm font-bold ${level.color}`}>
+                  {t('overall', language)}: {level.label === "Safe" ? t('safe', language) : level.label === "Moderate" ? t('caution', language) : level.label === "Concerning" ? t('warning', language) : t('danger', language)}
+                </span>
                 <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
                   {product.analysis.summary}
                 </p>
@@ -985,76 +944,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           </motion.div>
         )}
 
-        {/* FSSAI Compliance */}
-        {(() => {
-          const fssaiStatus = validateFSSAI(product.fssai_license);
-
-          if (fssaiStatus === "unknown" && fssaiLooking) {
-            return (
-              <motion.div variants={fadeUp} className="px-5 mb-4">
-                <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-oasis-card border border-oasis-border">
-                  <Loader2 size={18} className="text-oasis-muted animate-spin shrink-0" />
-                  <span className="text-sm text-oasis-muted">Checking FSSAI registration...</span>
-                </div>
-              </motion.div>
-            );
-          }
-
-          if (fssaiStatus === "unknown") return null;
-
-          const isRegistered = fssaiStatus === "registered";
-          const isNotFound = fssaiStatus === "not_found";
-
-          return (
-            <motion.div variants={fadeUp} className="px-5 mb-4">
-              <div
-                className={`flex items-center gap-3 p-3.5 rounded-2xl border ${
-                  isRegistered
-                    ? "bg-[#F0FBF4] border-[#1E8040]/15"
-                    : isNotFound
-                    ? "bg-oasis-card border-oasis-border"
-                    : "bg-[#FFF0EE] border-[#FF3B30]/15"
-                }`}
-              >
-                {isRegistered ? (
-                  <BadgeCheck size={20} className="text-[#1E8040] shrink-0" />
-                ) : isNotFound ? (
-                  <BadgeX size={20} className="text-oasis-muted shrink-0" />
-                ) : (
-                  <BadgeX size={20} className="text-[#CC1010] shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <span
-                    className={`text-sm font-bold ${
-                      isRegistered ? "text-[#1E8040]" : isNotFound ? "text-oasis-muted" : "text-[#CC1010]"
-                    }`}
-                  >
-                    {isRegistered
-                      ? "FSSAI Registered"
-                      : isNotFound
-                      ? "FSSAI Not Found Online"
-                      : "FSSAI License Invalid"}
-                  </span>
-                  {isRegistered && product.fssai_license && (
-                    <p className="text-[10px] font-mono text-oasis-muted mt-0.5 truncate">
-                      {product.fssai_license}
-                    </p>
-                  )}
-                  {isNotFound && (
-                    <p className="text-[10px] text-oasis-muted mt-0.5">
-                      Couldn&apos;t find a matching license in public databases — may still be compliant
-                    </p>
-                  )}
-                  {!isRegistered && !isNotFound && (
-                    <p className="text-[10px] text-oasis-muted mt-0.5">
-                      License format unrecognized — verify before purchasing
-                    </p>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          );
-        })()}
 
         {/* Hidden file input for label scanning */}
         <input
@@ -1068,7 +957,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
         {/* Ingredient section — always shows something */}
         <motion.div variants={fadeUp} className="px-5 mb-4">
-          <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Ingredient Analysis</h2>
+          <h2 className="font-semibold text-[17px] text-oasis-text mb-3">{t('ingredient_analysis', language)}</h2>
 
           {/* Analysis complete — show per-ingredient cards */}
           {product.analysis && product.analysis.ingredients.length > 0 && (
@@ -1191,7 +1080,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         {/* Warnings (generic) */}
         {product.analysis && product.analysis.warnings.length > 0 && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">Warnings</h2>
+            <h2 className="font-semibold text-[17px] text-oasis-text mb-3">{t('warnings', language)}</h2>
             <div className="space-y-2">
               {product.analysis.warnings.map((w, i) => (
                 <motion.div

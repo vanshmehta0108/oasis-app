@@ -4,6 +4,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ShieldCheck, AlertTriangle, AlertCircle, Skull } from "lucide-react";
 import type { IngredientAnalysis } from "@/lib/mockData";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 const riskConfig = {
   safe: {
@@ -54,6 +56,7 @@ const INITIAL_VISIBLE = 5;
 export function IngredientList({ ingredients }: { ingredients: (IngredientAnalysis | { name: string; risk_level?: string; risk?: string; explanation: string })[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const { language } = useLanguage();
 
   const sorted = [...ingredients.filter(Boolean)].sort((a, b) => {
     const ra = ("risk" in a ? a.risk : (a as { risk_level?: string }).risk_level) ?? "caution";
@@ -85,7 +88,7 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
             layout
             role="listitem"
             aria-expanded={isOpen}
-            aria-label={`${ing.name}: ${cfg.label} risk level. ${isOpen ? "Collapse" : "Expand"} for details`}
+            aria-label={`${ing.name}: ${t(riskKey as "safe" | "caution" | "warning" | "danger", language)} risk level. ${isOpen ? "Collapse" : "Expand"} for details`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -96,7 +99,7 @@ export function IngredientList({ ingredients }: { ingredients: (IngredientAnalys
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.pillBg} ${cfg.color}`}>
-                  {cfg.label}
+                  {t(riskKey as "safe" | "caution" | "warning" | "danger", language)}
                 </span>
                 <motion.div
                   animate={{ rotate: isOpen ? 180 : 0 }}

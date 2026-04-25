@@ -6,6 +6,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { ToastProvider } from "@/lib/useToast";
 import { AuthProvider } from "@/lib/useUser";
 import { UserDataProvider } from "@/lib/userData";
+import { LanguageProvider } from "@/components/LanguageProvider";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -92,6 +93,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ErrorBoundary>
         <AuthProvider>
         <UserDataProvider>
+        <LanguageProvider>
         <ToastProvider>
           <a
             href="#main-content"
@@ -107,6 +109,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SpeedInsights />
           <Analytics />
         </ToastProvider>
+        </LanguageProvider>
         </UserDataProvider>
         </AuthProvider>
         </ErrorBoundary>
