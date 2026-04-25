@@ -16,7 +16,7 @@ dotenv.config({ path: resolve(process.cwd(), ".env.local") });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
@@ -84,73 +84,84 @@ async function analyzeProduct(product) {
   return result;
 }
 
+const UUID_ZERO = "00000000-0000-0000-0000-000000000000";
+const BATCH_SIZE = 200;
+
 async function main() {
-  // Get all unanalyzed products with ingredients
-  const { data: products, error } = await supabase
+  const { count: total } = await supabase
     .from("products")
-    .select("*")
-    .is("analysis", null)
-    .not("ingredients", "eq", "{}")
-    .order("scan_count", { ascending: false });
+    .select("id", { count: "exact", head: true })
+    .is("safety_score", null)
+    .not("ingredients", "eq", "{}");
 
-  if (error) {
-    console.error("Failed to fetch products:", error.message);
-    process.exit(1);
-  }
-
-  // Filter products that actually have ingredients
-  const toAnalyze = products.filter(p => p.ingredients && p.ingredients.length > 0);
-  console.log(`\n🔬 ${toAnalyze.length} products to analyze\n`);
+  console.log(`\n🔬 ${total ?? "?"} products to analyze\n`);
 
   let done = 0;
   let failed = 0;
+  let lastId = UUID_ZERO;
   const CONCURRENCY = 3;
   const startTime = Date.now();
 
-  // Process in chunks of CONCURRENCY
-  for (let i = 0; i < toAnalyze.length; i += CONCURRENCY) {
-    const chunk = toAnalyze.slice(i, i + CONCURRENCY);
-    const results = await Promise.allSettled(
-      chunk.map(async (product) => {
-        try {
-          const analysis = await analyzeProduct(product);
+  while (true) {
+    const { data: products, error } = await supabase
+      .from("products")
+      .select("id, barcode, name, brand, category, ingredients, analysis")
+      .is("safety_score", null)
+      .not("ingredients", "eq", "{}")
+      .gt("id", lastId)
+      .order("id", { ascending: true })
+      .limit(BATCH_SIZE);
 
-          const { error: updateErr } = await supabase
-            .from("products")
-            .update({
-              safety_score: analysis.score,
-              score_grade: analysis.grade,
-              analysis,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("barcode", product.barcode);
+    if (error) { console.error("Fetch error:", error.message); break; }
+    if (!products || products.length === 0) break;
 
-          if (updateErr) throw new Error(updateErr.message);
+    const toAnalyze = products.filter(p => p.ingredients?.length > 0);
 
-          done++;
-          const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-          const rate = (done / (elapsed / 60)).toFixed(1);
-          console.log(
-            `✅ [${done}/${toAnalyze.length}] ${product.name.padEnd(35)} → ${analysis.score}/100 (${analysis.grade}) | ${elapsed}s | ${rate}/min`
-          );
-          return analysis;
-        } catch (err) {
-          failed++;
-          console.error(`❌ [${done + failed}/${toAnalyze.length}] ${product.name}: ${err.message.slice(0, 80)}`);
+    for (let i = 0; i < toAnalyze.length; i += CONCURRENCY) {
+      const chunk = toAnalyze.slice(i, i + CONCURRENCY);
+      await Promise.allSettled(
+        chunk.map(async (product) => {
+          try {
+            const analysis = await analyzeProduct(product);
 
-          // If rate limited, wait and retry
-          if (err.message.includes("429") || err.message.includes("quota")) {
-            console.log("   ⏳ Rate limited, waiting 10s...");
-            await new Promise(r => setTimeout(r, 10000));
+            // Preserve existing analysis fields (e.g. bb_sku, all_images from import)
+            const mergedAnalysis = { ...(product.analysis || {}), ...analysis };
+
+            const { error: updateErr } = await supabase
+              .from("products")
+              .update({
+                safety_score: analysis.score,
+                score_grade: analysis.grade,
+                analysis: mergedAnalysis,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", product.id);
+
+            if (updateErr) throw new Error(updateErr.message);
+
+            done++;
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+            const rate = (done / (elapsed / 60)).toFixed(1);
+            console.log(
+              `✅ [${done}/${total}] ${product.name.slice(0, 35).padEnd(35)} → ${analysis.score}/100 (${analysis.grade}) | ${rate}/min`
+            );
+          } catch (err) {
+            failed++;
+            console.error(`❌ ${product.name?.slice(0, 40)}: ${err.message?.slice(0, 80)}`);
+            if (err.message?.includes("429") || err.message?.includes("quota")) {
+              console.log("   ⏳ Rate limited, waiting 15s...");
+              await new Promise(r => setTimeout(r, 15_000));
+            }
           }
-          throw err;
-        }
-      })
-    );
+        })
+      );
+    }
+
+    lastId = products[products.length - 1].id;
   }
 
   const totalTime = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-  console.log(`\n✨ Done! ${done} analyzed, ${failed} failed in ${totalTime} minutes\n`);
+  console.log(`\n✨ Done! ${done} analyzed, ${failed} failed in ${totalTime} min\n`);
 }
 
 main().catch(console.error);

@@ -928,7 +928,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         </motion.div>
 
         {/* Summary card */}
-        {product.analysis && (
+        {hasScore && product.analysis?.summary && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
             <div className={`flex items-start gap-3 p-4 rounded-2xl ${level.bg} border border-black/[0.06] border-l-[3px] ${level.border}`}>
               <ShieldAlert size={20} className={`${level.color} shrink-0 mt-0.5`} />
