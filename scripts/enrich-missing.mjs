@@ -165,6 +165,7 @@ async function main() {
         processed,
         enriched,
         skipped,
+        lastId,
         processedBarcodes: [...processedBarcodes],
         savedAt: new Date().toISOString(),
       });
@@ -173,28 +174,30 @@ async function main() {
     }
   }
 
-  // ─── Cursor-paginated loop ────────────────────────────────────────────────
+  // ─── ID-cursor loop ───────────────────────────────────────────────────────
+  // Always paginate by id so we make forward progress even when no rows are
+  // enriched (non-enriched rows stay in the filter and would cause an
+  // offset-0 query to return the same batch forever).
 
-  let offset = 0;
-  let exhausted = false;
+  const UUID_ZERO = '00000000-0000-0000-0000-000000000000';
+  let lastId = RESUME ? (loadCheckpoint()?.lastId ?? UUID_ZERO) : UUID_ZERO;
 
-  while (!exhausted) {
+  while (true) {
     const { data: rows, error } = await sb
       .from('products')
       .select('id, barcode, name')
       .eq('ingredients', '{}')
       .not('barcode', 'is', null)
-      .range(offset, offset + BATCH_SIZE - 1);
+      .gt('id', lastId)
+      .order('id', { ascending: true })
+      .limit(BATCH_SIZE);
 
     if (error) {
-      console.error(`Supabase query error at offset ${offset}:`, error.message);
+      console.error(`Supabase query error (lastId=${lastId}):`, error.message);
       break;
     }
 
-    if (!rows || rows.length === 0) {
-      exhausted = true;
-      break;
-    }
+    if (!rows || rows.length === 0) break;
 
     for (const row of rows) {
       const barcode = row.barcode;
@@ -202,6 +205,7 @@ async function main() {
       // Skip if already processed (resume mode)
       if (processedBarcodes.has(barcode)) {
         processed++;
+        lastId = row.id;
         continue;
       }
 
@@ -231,28 +235,22 @@ async function main() {
             console.error(`  [update error] ${barcode}: ${updateErr.message}`);
             skipped++;
           } else {
+            console.log(`  [enriched] ${barcode} — ${row.name ?? '(no name)'} (${ingredients.length} ingredients)`);
             enriched++;
           }
         }
       }
 
       processed++;
+      lastId = row.id;
       processedBarcodes.add(barcode);
 
       // Progress log every PROGRESS_INTERVAL products
       if (processed % PROGRESS_INTERVAL === 0) {
-        console.log(`[${processed}/${total}] Enriched: ${enriched}, Skipped: ${skipped}`);
+        console.log(`[${processed}/${total}] Enriched: ${enriched}, Skipped: ${skipped}, lastId: ${lastId}`);
       }
 
       maybeCheckpoint();
-    }
-
-    // If the page was smaller than BATCH_SIZE, we've reached the end.
-    // But because we're updating rows as we go, the offset must stay at 0
-    // since enriched rows will no longer match the .eq('ingredients','{}') filter.
-    // We do NOT advance the offset — the query always returns the next un-enriched page.
-    if (rows.length < BATCH_SIZE) {
-      exhausted = true;
     }
   }
 
@@ -262,6 +260,7 @@ async function main() {
     processed,
     enriched,
     skipped,
+    lastId,
     processedBarcodes: [...processedBarcodes],
     savedAt: new Date().toISOString(),
     done: true,
