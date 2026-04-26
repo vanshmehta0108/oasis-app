@@ -126,21 +126,27 @@ function SearchContent() {
       setDbLoading(true);
       setOffLoading(true);
 
-      try {
-        const supaResults = await searchSupabase(query, category === "All" ? undefined : category);
-        if (gen !== searchGen.current) return;
-        setDbResults(supaResults.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
-      } catch {
-        if (gen !== searchGen.current) return;
-        setDbResults([]);
-      } finally {
-        if (gen === searchGen.current) setDbLoading(false);
-      }
+      // Supabase search — show results immediately, don't block on OFF
+      searchSupabase(query, category === "All" ? undefined : category)
+        .then((supaResults) => {
+          if (gen !== searchGen.current) return;
+          setDbResults(supaResults.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
+        })
+        .catch(() => {
+          if (gen !== searchGen.current) return;
+          setDbResults([]);
+        })
+        .finally(() => {
+          if (gen === searchGen.current) setDbLoading(false);
+        });
 
-      try {
-        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags=en:india&json=1&page_size=10&fields=code,product_name,brands,categories,ingredients_text,image_url`;
-        const res = await fetch(url, { signal: controller.signal });
-        if (res.ok) {
+      // OpenFoodFacts — supplemental, non-blocking
+      fetch(
+        `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&countries_tags=en:india&json=1&page_size=10&fields=code,product_name,brands,categories,ingredients_text,image_url`,
+        { signal: controller.signal }
+      )
+        .then(async (res) => {
+          if (!res.ok) return;
           const data = await res.json();
           if (gen !== searchGen.current) return;
           const mapped: OFFResult[] = (data.products || [])
@@ -160,13 +166,12 @@ function SearchContent() {
               analysis: { summary: "Tap to analyze", ingredients: [], warnings: [], healthier_alternative: "" },
             }));
           setOffResults(mapped);
-        }
-      } catch {
-        // ignore abort/network errors
-      } finally {
-        if (gen === searchGen.current) setOffLoading(false);
-      }
-    }, 400);
+        })
+        .catch(() => { /* ignore abort/network */ })
+        .finally(() => {
+          if (gen === searchGen.current) setOffLoading(false);
+        });
+    }, 350);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       controller.abort();
@@ -191,6 +196,7 @@ function SearchContent() {
       </motion.h1>
 
       <SearchBar
+        value={query}
         onSearch={handleSearch}
         onCategoryChange={handleCategory}
         selectedCategory={category}

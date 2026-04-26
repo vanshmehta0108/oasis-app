@@ -66,7 +66,7 @@ function scoreToGrade(score) {
 
 async function analyzeProduct(product) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash",
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
       responseMimeType: "application/json",
@@ -86,6 +86,8 @@ async function analyzeProduct(product) {
 
 const UUID_ZERO = "00000000-0000-0000-0000-000000000000";
 const BATCH_SIZE = 200;
+const CONCURRENCY_ARG = process.argv.find(a => a.startsWith('--concurrency='));
+const CONCURRENCY_OVERRIDE = CONCURRENCY_ARG ? parseInt(CONCURRENCY_ARG.split('=')[1]) : null;
 
 async function main() {
   const { count: total } = await supabase
@@ -99,7 +101,7 @@ async function main() {
   let done = 0;
   let failed = 0;
   let lastId = UUID_ZERO;
-  const CONCURRENCY = 3;
+  const CONCURRENCY = CONCURRENCY_OVERRIDE ?? 3;
   const startTime = Date.now();
 
   while (true) {
@@ -161,7 +163,17 @@ async function main() {
   }
 
   const totalTime = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-  console.log(`\n✨ Done! ${done} analyzed, ${failed} failed in ${totalTime} min\n`);
+  console.log(`\n✨ Pass done! ${done} analyzed, ${failed} failed in ${totalTime} min\n`);
 }
 
-main().catch(console.error);
+
+// Run continuously — re-check every 2 min for newly imported products
+async function loop() {
+  while (true) {
+    await main();
+    console.log("⏳ Waiting 2 min before next pass...\n");
+    await new Promise(r => setTimeout(r, 2 * 60_000));
+  }
+}
+
+loop().catch(console.error);

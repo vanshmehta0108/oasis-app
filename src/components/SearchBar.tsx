@@ -8,60 +8,71 @@ import { useUserData } from "@/lib/userData";
 const filterCategories = ["All", "Food", "Snacks", "Beverages", "Skincare", "Baby"];
 
 interface SearchBarProps {
+  value?: string;
   onSearch: (query: string) => void;
   onCategoryChange: (category: string) => void;
   selectedCategory: string;
 }
 
-export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: SearchBarProps) {
+export function SearchBar({ value, onSearch, onCategoryChange, selectedCategory }: SearchBarProps) {
   const { data, addRecentSearch } = useUserData();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(value ?? "");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>(undefined);
+  const prevValue = useRef(value);
 
   const recentSearches = data.recentSearches;
 
+  // Sync when parent drives value (e.g. suggestion chip clicks)
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      onSearch(query);
-      if (query.trim().length >= 2) {
-        void addRecentSearch(query);
-      }
-    }, 300);
-    return () => clearTimeout(debounceRef.current);
-  }, [query, onSearch, addRecentSearch]);
+    if (value !== undefined && value !== prevValue.current && value !== query) {
+      prevValue.current = value;
+      setQuery(value);
+      onSearch(value);
+    }
+  }, [value, query, onSearch]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setQuery(q);
+    onSearch(q); // parent debounces
+  };
 
   const handleRecent = (term: string) => {
     setQuery(term);
     setFocused(false);
     inputRef.current?.blur();
+    onSearch(term);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      clearTimeout(debounceRef.current);
       onSearch(query);
-      if (query.trim().length >= 2) {
-        void addRecentSearch(query);
-      }
+      if (query.trim().length >= 2) void addRecentSearch(query);
       inputRef.current?.blur();
     }
   };
 
+  const handleClear = () => {
+    setQuery("");
+    onSearch("");
+    inputRef.current?.focus();
+  };
+
   return (
     <div className="space-y-3" role="search" aria-label="Search products">
-      {/* Search input */}
       <div className="relative">
         <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-oasis-muted z-10" aria-hidden="true" />
         <motion.input
           ref={inputRef}
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleChange}
           onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 200)}
+          onBlur={() => {
+            setTimeout(() => setFocused(false), 200);
+            if (query.trim().length >= 2) void addRecentSearch(query);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Search products, brands..."
           aria-label="Search products and brands"
@@ -74,7 +85,7 @@ export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: Sear
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              onClick={() => setQuery("")}
+              onClick={handleClear}
               className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-oasis-border flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-oasis-green"
               aria-label="Clear search"
             >
@@ -84,7 +95,6 @@ export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: Sear
         </AnimatePresence>
       </div>
 
-      {/* Recent searches */}
       <AnimatePresence>
         {focused && !query && recentSearches.length > 0 && (
           <motion.div
@@ -112,7 +122,6 @@ export function SearchBar({ onSearch, onCategoryChange, selectedCategory }: Sear
         )}
       </AnimatePresence>
 
-      {/* Category chips */}
       <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1" role="radiogroup" aria-label="Filter by category">
         {filterCategories.map((cat) => (
           <motion.button

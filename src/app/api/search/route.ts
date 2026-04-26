@@ -82,7 +82,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(
       { results, count: results.length, query: q },
-      { headers: corsHeaders() }
+      {
+        headers: {
+          ...corsHeaders(),
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        },
+      }
     );
   } catch (error) {
     console.error("Search error:", error);
