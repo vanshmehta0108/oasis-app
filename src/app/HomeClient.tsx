@@ -11,6 +11,7 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { Onboarding } from "@/components/Onboarding";
 import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
+import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
 import { useUserData } from "@/lib/userData";
 import { useUser } from "@/lib/useUser";
 import { useLanguage } from "@/components/LanguageProvider";
@@ -59,41 +60,57 @@ const categoryIconMap: Record<string, { Icon: React.ElementType; bg: string; col
   Household: { Icon: HomeIcon,        bg: "#F0FBF4", color: "#1E8040" },
 };
 
+function mapDbProduct(p: Record<string, unknown>): Product {
+  const analysis = p.analysis as Record<string, unknown> | null;
+  return {
+    id: (p.barcode as string) || (p.id as string),
+    barcode: (p.barcode as string) || "",
+    name: (p.name as string) || "",
+    brand: (p.brand as string) || "Unknown",
+    category: (p.category as string) || "food",
+    ingredients: (p.ingredients as string[]) || [],
+    safety_score: p.safety_score != null ? (p.safety_score as number) : null,
+    grade: ((p.score_grade as string) || null) as Product["grade"],
+    image_url: (p.image_url as string) || "",
+    analysis: analysis
+      ? { summary: (analysis.summary as string) || "", ingredients: [], warnings: (analysis.warnings as string[]) || [], healthier_alternative: (analysis.healthier_alternative as string) || "" }
+      : { summary: "", ingredients: [], warnings: [], healthier_alternative: "" },
+  };
+}
+
 const categoryMap: Record<string, string> = {
   food: "Food", beverage: "Beverages", snack: "Snacks",
   skincare: "Skincare", baby_food: "Baby", household: "Household",
 };
 
-interface HomeClientProps {
-  initialTrending: Product[];
-  initialWorst: Product[];
-  initialRecent: Product[];
-  initialProductCount: number;
-  initialFlaggedCount: number;
-  initialCatCounts: Record<string, number>;
-}
-
-export default function HomeClient({
-  initialTrending,
-  initialWorst,
-  initialRecent,
-  initialProductCount,
-  initialFlaggedCount,
-  initialCatCounts,
-}: HomeClientProps) {
+export default function HomeClient() {
   const { data: userData, ready: userReady, markOnboarded } = useUserData();
   const { isAnonymous } = useUser();
   const { language } = useLanguage();
-
-  const trending = initialTrending;
-  const worst = initialWorst;
-  const recentlyAdded = initialRecent;
-  const productCount = initialProductCount;
-  const flaggedCount = initialFlaggedCount;
-  const catCounts = initialCatCounts;
+  const [trending, setTrending] = useState<Product[]>([]);
+  const [worst, setWorst] = useState<Product[]>([]);
+  const [recentlyAdded, setRecentlyAdded] = useState<Product[]>([]);
+  const [productCount, setProductCount] = useState(0);
+  const [flaggedCount, setFlaggedCount] = useState(0);
+  const [catCounts, setCatCounts] = useState<Record<string, number>>({});
 
   const scanCount = userData.scanCount;
   const compareCount = userData.compareList.length;
+
+  useEffect(() => {
+    getTrendingProducts(6)
+      .then((d) => setTrending(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
+      .catch((e) => console.error("Failed to load trending:", e));
+    getWorstRated(4)
+      .then((d) => setWorst(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
+      .catch((e) => console.error("Failed to load worst-rated:", e));
+    getRecentProducts(4)
+      .then((d) => setRecentlyAdded(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
+      .catch((e) => console.error("Failed to load recent:", e));
+    getProductCount().then(setProductCount).catch(() => setProductCount(0));
+    getFlaggedCount().then(setFlaggedCount).catch(() => setFlaggedCount(0));
+    getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
+  }, []);
 
   if (!userReady) return null;
   if (!userData.onboarded) {
