@@ -2,7 +2,22 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    remotePatterns: [
+      // Open Food Facts product images
+      { protocol: "https", hostname: "**.openfoodfacts.org" },
+      { protocol: "https", hostname: "**.openfoodfacts.net" },
+      // Google profile pictures (OAuth)
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "lh4.googleusercontent.com" },
+      { protocol: "https", hostname: "lh5.googleusercontent.com" },
+      { protocol: "https", hostname: "lh6.googleusercontent.com" },
+      // BigBasket product images
+      { protocol: "https", hostname: "**.bigbasket.com" },
+      // Catch-all for other product image sources (OFF, Flipkart, etc.)
+      { protocol: "https", hostname: "**" },
+    ],
+  },
 };
 
 export default withSentryConfig(nextConfig, {

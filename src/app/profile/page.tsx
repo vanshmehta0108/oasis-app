@@ -7,6 +7,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { User, Heart, Globe, Crown, History, X, Plus, ScanLine, ShieldCheck, CheckCircle, LogOut, Bookmark } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { ScoreRing } from "@/components/ScoreRing";
 import { useToast } from "@/lib/useToast";
 import { useUserData } from "@/lib/userData";
@@ -199,6 +200,10 @@ export default function ProfilePage() {
   const [allergyInput, setAllergyInput] = useState("");
   const [allergyDropdown, setAllergyDropdown] = useState("");
   const [signingIn, setSigningIn] = useState(false);
+  const [showAllScans, setShowAllScans] = useState(false);
+  const [showAllBookmarks, setShowAllBookmarks] = useState(false);
+  const SCAN_PAGE = 8;
+  const BOOKMARK_PAGE = 10;
   const { showToast } = useToast();
 
   const selectedConditions = userData.profile.conditions;
@@ -254,7 +259,8 @@ export default function ProfilePage() {
     setLanguageContext(lang === "English" ? "en" : "hi");
   };
 
-  const recentScans = scanHistory.slice(0, 5);
+  const visibleScans = scanHistory.slice(0, showAllScans ? undefined : SCAN_PAGE);
+  const visibleBookmarks = userData.bookmarks.slice(0, showAllBookmarks ? undefined : BOOKMARK_PAGE);
   const safeProducts = scanHistory.filter((p) => (p.score ?? 0) >= 70).length;
 
   if (ready && error === "setup_required") {
@@ -293,8 +299,7 @@ export default function ProfilePage() {
         <motion.div variants={fadeUp} className="flex flex-col items-center pt-2 pb-6 mb-2">
           <div className="w-20 h-20 rounded-full bg-white border border-black/[0.08] flex items-center justify-center mb-3 overflow-hidden" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             {user?.user_metadata?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.user_metadata.avatar_url as string} alt="Profile picture" className="w-full h-full object-cover" />
+              <Image src={user.user_metadata.avatar_url as string} alt="Profile picture" width={80} height={80} className="w-full h-full object-cover" />
             ) : (
               <User size={32} style={{ color: "#007AFF" }} />
             )}
@@ -489,7 +494,7 @@ export default function ProfilePage() {
               <span className="text-[11px]" style={{ color: "#8E8E93" }}>· {userData.bookmarks.length}</span>
             </div>
             <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-              {userData.bookmarks.slice(0, 10).map((b, i) => (
+              {visibleBookmarks.map((b, i) => (
                 <Link key={b.id} href={`/product/${b.id}`}>
                   <motion.div
                     whileTap={{ scale: 0.98 }}
@@ -508,6 +513,15 @@ export default function ProfilePage() {
                 </Link>
               ))}
             </div>
+            {userData.bookmarks.length > BOOKMARK_PAGE && (
+              <button
+                onClick={() => setShowAllBookmarks((v) => !v)}
+                className="w-full mt-2 py-2.5 text-sm font-semibold rounded-xl bg-white"
+                style={{ color: "#007AFF", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}
+              >
+                {showAllBookmarks ? "Show less" : `Show all ${userData.bookmarks.length} saved`}
+              </button>
+            )}
           </motion.div>
         )}
 
@@ -516,29 +530,50 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 mb-3">
             <History size={15} style={{ color: "#007AFF" }} />
             <h2 className="font-semibold text-[17px] text-black">{t('scan_history', language)}</h2>
+            {scanHistory.length > 0 && (
+              <span className="text-[11px]" style={{ color: "#8E8E93" }}>· {scanHistory.length}</span>
+            )}
           </div>
-          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-            <div className="space-y-0">
-              {recentScans.map((p, i) => (
-                <Link key={p.id} href={`/product/${p.id}`}>
-                  <motion.div
-                    whileTap={{ scale: 0.98 }}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? "border-t border-black/[0.06]" : ""}`}
-                  >
-                    <div className="w-3 h-3 rounded-full bg-[rgba(0,122,255,0.2)] border-2 border-[#007AFF] shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-semibold text-black truncate">{p.name}</p>
-                      <p className="text-[11px]" style={{ color: "#8E8E93" }}>{p.brand}</p>
-                    </div>
-                    <ScoreRing score={p.score ?? 0} grade={p.grade ?? "?"} size="sm" animate={false} />
-                  </motion.div>
-                </Link>
-              ))}
+          {scanHistory.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-white text-center" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+              <ScanLine size={24} className="mx-auto mb-2" style={{ color: "#C7C7CC" }} />
+              <p className="text-sm" style={{ color: "#8E8E93" }}>No scans yet — scan a product to see your history.</p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+                <div className="space-y-0">
+                  {visibleScans.map((p, i) => (
+                    <Link key={`${p.id}-${p.timestamp}`} href={`/product/${p.id}`}>
+                      <motion.div
+                        whileTap={{ scale: 0.98 }}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.03 }}
+                        className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? "border-t border-black/[0.06]" : ""}`}
+                      >
+                        <div className="w-3 h-3 rounded-full bg-[rgba(0,122,255,0.2)] border-2 border-[#007AFF] shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[14px] font-semibold text-black truncate">{p.name}</p>
+                          <p className="text-[11px]" style={{ color: "#8E8E93" }}>{p.brand}</p>
+                        </div>
+                        <ScoreRing score={p.score ?? 0} grade={p.grade ?? "?"} size="sm" animate={false} />
+                      </motion.div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              {scanHistory.length > SCAN_PAGE && (
+                <button
+                  onClick={() => setShowAllScans((v) => !v)}
+                  className="w-full mt-2 py-2.5 text-sm font-semibold rounded-xl bg-white"
+                  style={{ color: "#007AFF", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}
+                >
+                  {showAllScans ? "Show less" : `Show all ${scanHistory.length} scans`}
+                </button>
+              )}
+            </>
+          )}
         </motion.div>
 
         {/* Upgrade to Pro — premium card */}

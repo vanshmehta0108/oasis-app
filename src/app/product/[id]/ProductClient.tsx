@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check, Flag, Sparkles, Package, Info, Bookmark, BookmarkCheck, ChevronRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useToast } from "@/lib/useToast";
 import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
 import { ScoreRing } from "@/components/ScoreRing";
@@ -139,6 +140,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
     initialProduct ? mapRawToProduct(initialProduct) : null
   );
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzingMessage, setAnalyzingMessage] = useState("AI is analysing ingredients…");
   const [labelScanning, setLabelScanning] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
@@ -206,32 +208,62 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
   // already navigated away from. Bumped on each id change by the loader effect.
   const loaderGen = useRef(0);
 
+  // Reads a text/event-stream response and calls onEvent for each parsed SSE event.
+  async function readSSE(
+    res: Response,
+    gen: number,
+    onEvent: (data: Record<string, unknown>) => void,
+  ) {
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || gen !== loaderGen.current) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            onEvent(JSON.parse(line.slice(6)) as Record<string, unknown>);
+          } catch { /* ignore malformed lines */ }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   // Trigger AI analysis for unscored products
   function runAnalysis(ingredients: string[], category: string, barcode?: string) {
     setAnalyzing(true);
+    setAnalyzingMessage("Checking database…");
     const gen = loaderGen.current;
     fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ingredients, category: category || "food", lang, ...(barcode ? { barcode } : {}) }),
     })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((result) => {
-        if (gen !== loaderGen.current) return; // user navigated away
-        if (!result?.analysis) return;
-        setProduct((prev) =>
-          prev
-            ? {
-                ...prev,
-                safety_score: result.analysis.score,
-                grade: result.analysis.grade,
-                analysis: mapAnalysisJson(result.analysis),
-              }
-            : prev,
-        );
-        // If the server honored our lang request, the returned analysis is
-        // already in that language — track it so we don't re-translate.
-        if (result.lang) setAnalysisLang(result.lang === "hi" ? "hi" : "en");
+      .then(async (res) => {
+        if (!res.ok) { console.error("analyze failed", res.status); return; }
+        await readSSE(res, gen, (data) => {
+          if (data.type === "progress" && typeof data.message === "string") {
+            setAnalyzingMessage(data.message);
+          } else if (data.type === "complete") {
+            if (gen !== loaderGen.current) return;
+            const result = data as Record<string, unknown>;
+            if (!result.analysis) return;
+            const analysis = result.analysis as Record<string, unknown>;
+            setProduct((prev) =>
+              prev
+                ? { ...prev, safety_score: analysis.score as number, grade: analysis.grade as string, analysis: mapAnalysisJson(analysis) }
+                : prev,
+            );
+            if (data.lang) setAnalysisLang(data.lang === "hi" ? "hi" : "en");
+          }
+        });
       })
       .catch(console.error)
       .finally(() => {
@@ -272,27 +304,42 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
           lang,
         }),
       })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((result) => {
-          if (gen !== loaderGen.current) return;
-          if (!result?.analysis) {
+        .then(async (res) => {
+          if (!res.ok) { showToast("Label scan failed — please try again", "error"); return; }
+          let gotResult = false;
+          await readSSE(res, gen, (data) => {
+            if (data.type === "progress" && typeof data.message === "string") {
+              // label scanning has its own spinner copy, no need to update message
+            } else if (data.type === "complete") {
+              if (gen !== loaderGen.current) return;
+              const payload = data as Record<string, unknown>;
+              if (!payload.analysis) {
+                showToast("Couldn't read the label — try better lighting or a closer shot", "error");
+                return;
+              }
+              gotResult = true;
+              const analysis = payload.analysis as Record<string, unknown>;
+              const label = payload.label_extraction as Record<string, unknown> | null;
+              setNotFoundState(false);
+              setProduct((prev) => ({
+                id,
+                name: prev?.name || (label?.product_name as string) || "Unknown Product",
+                brand: prev?.brand || (label?.brand as string) || "Unknown Brand",
+                category: prev?.category || (label?.category_guess as string) || "food",
+                ingredients: (label?.ingredients as string[] | undefined)?.length ? (label!.ingredients as string[]) : (prev?.ingredients ?? []),
+                safety_score: analysis.score as number,
+                grade: analysis.grade as string,
+                image_url: prev?.image_url,
+                fssai_license: (label?.fssai_license as string | null) ?? prev?.fssai_license ?? null,
+                analysis: mapAnalysisJson(analysis),
+              }));
+            } else if (data.type === "error") {
+              showToast("Couldn't read the label — try better lighting or a closer shot", "error");
+            }
+          });
+          if (!gotResult && gen === loaderGen.current) {
             showToast("Couldn't read the label — try better lighting or a closer shot", "error");
-            return;
           }
-          const label = result.label_extraction;
-          setNotFoundState(false);
-          setProduct((prev) => ({
-            id,
-            name: prev?.name || label?.product_name || "Unknown Product",
-            brand: prev?.brand || label?.brand || "Unknown Brand",
-            category: prev?.category || label?.category_guess || "food",
-            ingredients: label?.ingredients?.length ? label.ingredients : (prev?.ingredients ?? []),
-            safety_score: result.analysis.score,
-            grade: result.analysis.grade,
-            image_url: prev?.image_url,
-            fssai_license: label?.fssai_license ?? prev?.fssai_license ?? null,
-            analysis: mapAnalysisJson(result.analysis),
-          }));
         })
         .catch(() => {
           if (gen !== loaderGen.current) return;
@@ -760,7 +807,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
           >
             <Loader2 size={16} className={`${labelScanning ? "text-[#007AFF]" : "text-oasis-green"} animate-spin shrink-0`} />
             <p className={`text-xs font-medium ${labelScanning ? "text-[#007AFF]" : "text-oasis-green"}`}>
-              {labelScanning ? "Reading label and scoring ingredients…" : "AI is analysing ingredients… This may take a few seconds."}
+              {labelScanning ? "Reading label and scoring ingredients…" : analyzingMessage}
             </p>
           </motion.div>
         )}
@@ -771,13 +818,13 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             variants={fadeUp}
             className={`flex justify-center px-5 ${analyzing || labelScanning ? "pt-4" : "pt-20"} pb-2`}
           >
-            <div className="w-[140px] h-[180px] rounded-2xl bg-white flex items-center justify-center overflow-hidden" style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+            <div className="w-[140px] h-[180px] rounded-2xl bg-white overflow-hidden relative" style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}>
+              <Image
                 src={product.image_url}
                 alt={product.name}
-                loading="lazy"
-                className="max-w-full max-h-full object-contain"
+                fill
+                sizes="140px"
+                className="object-contain"
                 onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
               />
             </div>

@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { masterLookup } from "@/lib/master";
 import { supabase } from "@/lib/supabase";
@@ -23,7 +24,7 @@ const AnalyzeRequest = z.object({
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): HeadersInit {
+function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -31,66 +32,101 @@ function corsHeaders(): HeadersInit {
   };
 }
 
-function errorResponse(message: string, status: number, details?: string): NextResponse {
-  return NextResponse.json(
-    { error: message, ...(details ? { details } : {}) },
-    { status, headers: corsHeaders() }
-  );
+function sseHeaders(): Record<string, string> {
+  return {
+    ...corsHeaders(),
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Connection": "keep-alive",
+  };
 }
 
 function clientIp(req: NextRequest): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 }
 
-// ── Handler ─────────────────────────────────────────────────────────────────────
-
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+function makeStream(
+  handler: (send: (data: object) => void) => Promise<void>
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
+      try {
+        await handler(send);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        send({ type: "error", error: msg });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: sseHeaders() });
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+function jsonError(message: string, status: number, details?: string): Response {
+  return new Response(
+    JSON.stringify({ error: message, ...(details ? { details } : {}) }),
+    { status, headers: { "Content-Type": "application/json", ...corsHeaders() } }
+  );
+}
+
+// ── Handler ─────────────────────────────────────────────────────────────────────
+
+export async function OPTIONS(): Promise<Response> {
+  return new Response(null, { status: 204, headers: corsHeaders() });
+}
+
+export async function POST(req: NextRequest): Promise<Response> {
   const ip = clientIp(req);
-  // Image requests are ~100x more expensive (Gemini vision call); stricter bucket.
   const started = Date.now();
 
+  let body: unknown;
   try {
-    const body = await req.json();
-    const parsed = AnalyzeRequest.safeParse(body);
+    body = await req.json();
+  } catch {
+    return jsonError("Invalid JSON body", 400);
+  }
 
-    if (!parsed.success) {
-      const firstIssue = parsed.error.issues[0];
-      return errorResponse("Invalid request", 400, firstIssue?.message);
-    }
+  const parsed = AnalyzeRequest.safeParse(body);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    return jsonError("Invalid request", 400, firstIssue?.message);
+  }
 
-    const { barcode, name: productName, brand: productBrand, ingredients, image, category, lang } = parsed.data;
+  const { barcode, name: productName, brand: productBrand, ingredients, image, category, lang } = parsed.data;
 
-    // Rate limit AFTER parse so malformed bodies don't burn tokens, but
-    // BEFORE the expensive Gemini call. Image calls get a tighter bucket.
-    const isImage = !!image;
-    const rl = checkRateLimit(
-      `analyze:${isImage ? "img" : "txt"}:${ip}`,
-      isImage ? { capacity: 6, refillPerMin: 6 } : { capacity: 30, refillPerMin: 30 },
+  const isImage = !!image;
+  const rl = checkRateLimit(
+    `analyze:${isImage ? "img" : "txt"}:${ip}`,
+    isImage ? { capacity: 6, refillPerMin: 6 } : { capacity: 30, refillPerMin: 30 },
+  );
+  if (!rl.ok) {
+    log.warn("analyze.rate_limited", { ip, isImage, retryAfter: rl.retryAfter });
+    return jsonError(
+      "Rate limit exceeded",
+      429,
+      `Too many requests. Retry in ${rl.retryAfter}s.`
     );
-    if (!rl.ok) {
-      log.warn("analyze.rate_limited", { ip, isImage, retryAfter: rl.retryAfter });
-      return NextResponse.json(
-        { error: "Rate limit exceeded", details: `Too many requests. Retry in ${rl.retryAfter}s.`, retryAfter: rl.retryAfter },
-        { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
-      );
-    }
+  }
 
-    if (!ingredients && !image && !barcode) {
-      return errorResponse("Provide at least one of: barcode, ingredients, or image", 400);
-    }
+  if (!ingredients && !image && !barcode) {
+    return jsonError("Provide at least one of: barcode, ingredients, or image", 400);
+  }
 
-    // Check cache if barcode provided — master sheet first (zero cost), then DB
+  return makeStream(async (send) => {
+    send({ type: "progress", step: "cache", message: "Checking database…" });
+
+    // Cache check — master sheet (zero cost, instant)
     if (barcode) {
       const masterProduct = masterLookup(barcode);
       if (masterProduct?.analysis) {
-        return NextResponse.json(
-          { source: "master", product: { barcode, ...masterProduct }, analysis: masterProduct.analysis },
-          { headers: corsHeaders() }
-        );
+        send({ type: "complete", source: "master", product: { barcode, ...masterProduct }, analysis: masterProduct.analysis, lang });
+        return;
       }
 
       const { data: existing } = await supabase
@@ -101,10 +137,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       const product = existing as Product | null;
       if (product?.analysis) {
-        return NextResponse.json(
-          { source: "cached", product, analysis: product.analysis },
-          { headers: corsHeaders() }
-        );
+        send({ type: "complete", source: "cached", product, analysis: product.analysis, lang });
+        return;
       }
     }
 
@@ -113,28 +147,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let labelData = null;
 
     if (image) {
+      send({ type: "progress", step: "ocr", message: "Reading ingredient label…" });
       try {
         labelData = await analyzeLabel(image);
       } catch (err) {
-        console.error("Label extraction failed:", err);
-        return errorResponse(
-          "Couldn't read the label",
-          422,
-          "The image was too blurry or dark to extract ingredients. Try better lighting or a closer shot."
-        );
+        log.error("analyze.label_fail", { ip, err: err instanceof Error ? err.message : String(err) });
+        send({ type: "error", error: "Couldn't read the label — try better lighting or a closer shot." });
+        return;
       }
       finalIngredients = labelData.ingredients;
     }
 
     if (finalIngredients.length === 0) {
-      return errorResponse(
-        "No ingredients found",
-        400,
-        image
+      send({
+        type: "error",
+        error: image
           ? "Couldn't find an ingredient list on this label. Try framing the INGREDIENTS section directly."
-          : "Provide an ingredients list or a clearer label image."
-      );
+          : "No ingredients found. Provide an ingredients list or a clearer label image.",
+      });
+      return;
     }
+
+    // AI analysis
+    send({ type: "progress", step: "ai", message: `Analysing ${finalIngredients.length} ingredient${finalIngredients.length === 1 ? "" : "s"}…` });
 
     let analysis;
     try {
@@ -143,28 +178,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       log.error("analyze.ingredients_fail", { ip, err: err instanceof Error ? err.message : String(err) });
       const message = err instanceof Error ? err.message : "Analysis failed";
       const isRateLimit = /rate|quota|429|resource_exhausted/i.test(message);
-      return errorResponse(
-        isRateLimit ? "Analysis temporarily unavailable" : "Analysis failed",
-        isRateLimit ? 429 : 500,
-        isRateLimit ? "Our AI is rate-limited right now. Please retry in a minute." : message
-      );
+      send({
+        type: "error",
+        error: isRateLimit
+          ? "AI temporarily unavailable — our capacity is rate-limited. Retry in a minute."
+          : "Analysis failed — please try again.",
+      });
+      return;
     }
 
-    // Optional localization — happens AFTER persisting the canonical English
-    // version so the DB cache always holds the source-of-truth English
-    // analysis. Hindi output is per-request, not stored.
+    // Optional localization — canonical English is persisted to DB; Hindi is per-request
     let localizedAnalysis = analysis;
     if (lang === "hi") {
+      send({ type: "progress", step: "translate", message: "Translating to Hindi…" });
       try {
         localizedAnalysis = await translateAnalysis(analysis, "hi");
       } catch (err) {
         log.warn("analyze.translate_fail", { ip, lang, err: err instanceof Error ? err.message : String(err) });
-        // Fall back to English rather than 500 — user still gets a result.
+        // Fall back to English
       }
     }
 
-    // Store result if we have a barcode
+    // Persist to DB if we have a barcode
+    let upserted: Product | null = null;
     if (barcode) {
+      const storedAnalysis = {
+        ...analysis,
+        healthier_alternative: (analysis as unknown as Record<string, string>).healthier_tip,
+      };
+
       const productData: ProductInsert = {
         barcode,
         name: productName || labelData?.product_name || "Unknown Product",
@@ -175,44 +217,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         safety_score: analysis.score,
         score_grade: analysis.grade,
         fssai_license: labelData?.fssai_license ?? null,
-        analysis: analysis as unknown as Record<string, unknown>,
+        analysis: storedAnalysis as unknown as Record<string, unknown>,
       };
 
-      // Remap healthier_tip → healthier_alternative so product page renders it
-      const storedAnalysis = {
-        ...analysis,
-        healthier_alternative: (analysis as unknown as Record<string, string>).healthier_tip,
-      };
-      productData.analysis = storedAnalysis as unknown as Record<string, unknown>;
-
-      const { data: upserted } = await supabase
+      const { data } = await supabase
         .from("products")
         // @ts-expect-error Supabase generic typing mismatch
         .upsert(productData, { onConflict: "barcode" })
         .select()
         .single();
 
-      log.info("analyze.ok", { ip, source: "analyzed", barcode, isImage, lang, durationMs: Date.now() - started, score: analysis.score });
-      return NextResponse.json(
-        {
-          source: "analyzed",
-          product: upserted as Product | null,
-          analysis: localizedAnalysis,
-          label_extraction: labelData,
-          lang,
-        },
-        { headers: corsHeaders() }
-      );
+      upserted = data as Product | null;
     }
 
-    log.info("analyze.ok", { ip, source: "analyzed", isImage, lang, durationMs: Date.now() - started, score: analysis.score });
-    return NextResponse.json(
-      { source: "analyzed", analysis: localizedAnalysis, label_extraction: labelData, lang },
-      { headers: corsHeaders() }
-    );
-  } catch (error) {
-    log.error("analyze.fail", { ip, err: error instanceof Error ? error.message : String(error) });
-    const message = error instanceof Error ? error.message : "Analysis failed";
-    return errorResponse(message, 500);
-  }
+    log.info("analyze.ok", { ip, source: "analyzed", barcode, isImage, lang, durationMs: Date.now() - started, score: analysis.score });
+
+    send({
+      type: "complete",
+      source: "analyzed",
+      product: upserted,
+      analysis: localizedAnalysis,
+      label_extraction: labelData,
+      lang,
+    });
+  });
 }
