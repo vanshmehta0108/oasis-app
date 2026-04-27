@@ -78,16 +78,23 @@ function winnerReason(winner: FullProduct, others: FullProduct[]): string {
   const parts: string[] = [];
   const score = winner.safety_score;
   if (score != null) {
-    const diff = Math.min(...others.filter(o => o.safety_score != null).map(o => score - (o.safety_score ?? 0)));
-    if (diff > 0) parts.push(`${diff} points safer than the nearest alternative`);
+    const otherScores = others
+      .map((o) => o.safety_score)
+      .filter((s): s is number => s != null);
+    if (otherScores.length > 0) {
+      const diff = score - Math.max(...otherScores);
+      if (diff > 0) parts.push(`${diff} points safer than the nearest alternative`);
+    }
   }
   const wCounts = riskCounts(winner.analysis?.ingredients);
   if (wCounts && wCounts.danger === 0) parts.push("no dangerous ingredients");
-  if (wCounts && wCounts.danger < Math.max(...others.map(o => riskCounts(o.analysis?.ingredients)?.danger ?? 0)))
+  const otherDangers = others.map((o) => riskCounts(o.analysis?.ingredients)?.danger ?? 0);
+  if (wCounts && otherDangers.length > 0 && wCounts.danger < Math.max(...otherDangers))
     parts.push("fewest risky ingredients");
   const wWarnings = winner.analysis?.warnings?.length ?? 0;
-  const maxWarnings = Math.max(...others.map(o => o.analysis?.warnings?.length ?? 0));
-  if (wWarnings < maxWarnings) parts.push("fewer health warnings");
+  const otherWarningCounts = others.map((o) => o.analysis?.warnings?.length ?? 0);
+  if (otherWarningCounts.length > 0 && wWarnings < Math.max(...otherWarningCounts))
+    parts.push("fewer health warnings");
   return parts.length > 0 ? `Scores highest with ${parts.join(", ")}.` : "Highest overall safety score.";
 }
 
@@ -125,10 +132,18 @@ export default function ComparePage() {
   const [fullProducts, setFullProducts] = useState<(FullProduct | null)[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Strip the "off-" / "web-" routing prefix before looking up in the DB,
+  // since those products are stored under their bare barcode.
+  function resolveId(id: string): string {
+    if (id.startsWith("off-")) return id.slice(4);
+    if (id.startsWith("web-")) return id.slice(4);
+    return id;
+  }
+
   useEffect(() => {
     if (items.length === 0) { setFullProducts([]); return; }
     setLoading(true);
-    Promise.all(items.map((item) => getProductById(item.id).catch(() => null)))
+    Promise.all(items.map((item) => getProductById(resolveId(item.id)).catch(() => null)))
       .then((results) => setFullProducts(results as (FullProduct | null)[]))
       .finally(() => setLoading(false));
   }, [items]);
