@@ -38,6 +38,35 @@ function mapIngredient(ing: { name: string; risk_level?: string; risk?: string; 
   return { name: ing.name, risk: ing.risk || ing.risk_level || "caution", explanation: ing.explanation };
 }
 
+// Reads a text/event-stream response and returns the data from the first
+// "complete" event, or null if the stream ends without one.
+async function readSSEComplete(res: Response): Promise<Record<string, unknown> | null> {
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let result: Record<string, unknown> | null = null;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (value) buf += decoder.decode(value, { stream: !done });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const evt = JSON.parse(line.slice(6)) as Record<string, unknown>;
+          if (evt.type === "complete") result = evt;
+        } catch { /* ignore malformed lines */ }
+      }
+      if (done) break;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return result;
+}
+
 export default function ScanPage() {
   const router = useRouter();
   const { data: userData } = useUserData();
@@ -88,17 +117,18 @@ export default function ScanPage() {
             }),
           });
           if (aRes.ok) {
-            const aData = await aRes.json();
-            if (aData.analysis) {
+            const evt = await readSSEComplete(aRes);
+            if (evt?.analysis) {
+              const a = evt.analysis as Record<string, unknown>;
               product = {
                 ...product,
-                safety_score: aData.analysis.score,
-                grade: aData.analysis.grade,
+                safety_score: a.score as number,
+                grade: a.grade as string,
                 analysis: {
-                  summary: aData.analysis.summary,
-                  ingredients: (aData.analysis.ingredients || []).map(mapIngredient),
-                  warnings: aData.analysis.warnings || [],
-                  healthier_alternative: aData.analysis.healthier_tip || aData.analysis.healthier_alternative || "",
+                  summary: a.summary as string,
+                  ingredients: ((a.ingredients as Array<{ name: string; risk_level?: string; risk?: string; explanation: string }>) || []).map(mapIngredient),
+                  warnings: (a.warnings as string[]) || [],
+                  healthier_alternative: (a.healthier_tip as string) || (a.healthier_alternative as string) || "",
                 },
               };
             }
@@ -108,12 +138,17 @@ export default function ScanPage() {
         }
       }
 
-      // Store enriched product data for the product page
+      // Store enriched product data for the product page. If the inline
+      // analyze call above failed (network error / non-OK / empty stream),
+      // product.analysis is still missing — keep needs_analysis truthy so
+      // ProductClient retries instead of presenting an unanalyzed product
+      // marked "no analysis needed".
+      const stillNeedsAnalysis = !product.analysis;
       const source = data.source;
       if (source === "openfoodfacts") {
-        sessionStorage.setItem(`off-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
+        sessionStorage.setItem(`off-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: stillNeedsAnalysis }));
       } else if (source === "web") {
-        sessionStorage.setItem(`web-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
+        sessionStorage.setItem(`web-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: stillNeedsAnalysis }));
       } else if ((source === "database" || source === "master") && product.analysis) {
         // Cache enriched DB product so product page doesn't re-fetch
         sessionStorage.setItem(`db-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
@@ -135,29 +170,33 @@ export default function ScanPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64, lang }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const productId = data.product?.barcode || data.product?.id || `analyzed-${Date.now()}`;
-        sessionStorage.setItem(`analyzed-${productId}`, JSON.stringify({
-          id: productId,
-          name: data.label_extraction?.product_name || data.product?.name || "Scanned Product",
-          brand: data.label_extraction?.brand || data.product?.brand || "Unknown",
-          category: data.label_extraction?.category_guess || "food",
-          ingredients: data.label_extraction?.ingredients || [],
-          safety_score: data.analysis?.score ?? null,
-          grade: data.analysis?.grade ?? null,
-          fssai_license: data.label_extraction?.fssai_license ?? null,
-          analysis: data.analysis ? {
-            summary: data.analysis.summary,
-            ingredients: (data.analysis.ingredients || []).map(mapIngredient),
-            warnings: data.analysis.warnings || [],
-            healthier_alternative: data.analysis.healthier_tip || data.analysis.healthier_alternative || "",
-          } : null,
-        }));
-        router.push(`/product/${productId}`);
-      } else {
-        setState("not-found");
-      }
+      if (!res.ok) { setState("not-found"); return; }
+
+      const evt = await readSSEComplete(res);
+      if (!evt || evt.type === "error") { setState("not-found"); return; }
+
+      const label = evt.label_extraction as Record<string, unknown> | null;
+      const analysis = evt.analysis as Record<string, unknown> | null;
+      const product = evt.product as Record<string, unknown> | null;
+      const productId = (product?.barcode as string) || (product?.id as string) || `analyzed-${Date.now()}`;
+
+      sessionStorage.setItem(`analyzed-${productId}`, JSON.stringify({
+        id: productId,
+        name: (label?.product_name as string) || (product?.name as string) || "Scanned Product",
+        brand: (label?.brand as string) || (product?.brand as string) || "Unknown",
+        category: (label?.category_guess as string) || "food",
+        ingredients: (label?.ingredients as string[]) || [],
+        safety_score: (analysis?.score as number) ?? null,
+        grade: (analysis?.grade as string) ?? null,
+        fssai_license: (label?.fssai_license as string) ?? null,
+        analysis: analysis ? {
+          summary: analysis.summary as string,
+          ingredients: ((analysis.ingredients as Array<{ name: string; risk_level?: string; risk?: string; explanation: string }>) || []).map(mapIngredient),
+          warnings: (analysis.warnings as string[]) || [],
+          healthier_alternative: (analysis.healthier_tip as string) || (analysis.healthier_alternative as string) || "",
+        } : null,
+      }));
+      router.push(`/product/${productId}`);
     } catch {
       setState("not-found");
     }
