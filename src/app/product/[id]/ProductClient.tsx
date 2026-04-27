@@ -18,6 +18,7 @@ import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
+import { BuyOnline } from "@/components/BuyOnline";
 
 interface PersonalWarning {
   warning: string;
@@ -185,7 +186,11 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
   // Dynamic OG meta tags
   useEffect(() => {
     if (!product) return;
-    document.title = `${product.name} — ${score}/100 | Sift`;
+    // For unscored products score falls back to 0 — don't render that as
+    // "0/100" in the page title or share metadata since 0 is a real
+    // (worst-case) score; show the product name only and let the share
+    // image renderer handle the no-score state.
+    document.title = hasScore ? `${product.name} — ${score}/100 | Sift` : `${product.name} | Sift`;
 
     const setMeta = (prop: string, content: string) => {
       let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement;
@@ -197,12 +202,14 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       el.content = content;
     };
 
-    const shareUrl = `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}&score=${score}&grade=${grade}`;
-    setMeta("og:title", `${product.name} — Safety Score: ${score}/100`);
-    setMeta("og:description", product.analysis?.summary || `Scanned on Sift. Grade ${grade}.`);
+    const shareUrl = hasScore
+      ? `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}&score=${score}&grade=${grade}`
+      : `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}`;
+    setMeta("og:title", hasScore ? `${product.name} — Safety Score: ${score}/100` : product.name);
+    setMeta("og:description", product.analysis?.summary || (hasScore ? `Scanned on Sift. Grade ${grade}.` : "Scanned on Sift."));
     setMeta("og:image", shareUrl);
     setMeta("og:type", "article");
-  }, [product, score, grade]);
+  }, [product, score, grade, hasScore]);
 
   // Guards against late responses writing state for a product the user has
   // already navigated away from. Bumped on each id change by the loader effect.
@@ -331,6 +338,18 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 grade: analysis.grade as string,
                 image_url: prev?.image_url,
                 fssai_license: (label?.fssai_license as string | null) ?? prev?.fssai_license ?? null,
+                // Preserve the barcode that brought the user to this page
+                // (lookup-route prefix or DB barcode) — it's used by the
+                // "More details" panel and the report-issue mailto link.
+                barcode: prev?.barcode,
+                // Pull nutritional_info from the freshly-extracted label
+                // when available; otherwise keep what we already had.
+                // Without this, scanning a label after the product loaded
+                // from DB would erase its nutrition panel.
+                nutritional_info:
+                  (label?.nutritional_info as Record<string, unknown> | null | undefined) ??
+                  prev?.nutritional_info ??
+                  null,
                 analysis: mapAnalysisJson(analysis),
               }));
             } else if (data.type === "error") {
@@ -1159,19 +1178,15 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
                   {product.analysis.healthier_alternative}
                 </p>
-                <Link
-                  href={`https://www.amazon.in/s?k=${encodeURIComponent(
-                    (product.analysis?.healthier_alternative?.split(/[.,;\n]/)[0] || product.name).slice(0, 80).trim()
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-lg bg-[#1E8040]/10 border border-[#1E8040]/20 text-[#1E8040] text-xs font-semibold"
-                >
-                  <ExternalLink size={12} />
-                  Shop Now
-                </Link>
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {/* Buy Online — affiliate links */}
+        {product.name && (
+          <motion.div variants={fadeUp} className="px-5 mb-4">
+            <BuyOnline productName={product.name} brand={product.brand} />
           </motion.div>
         )}
 
