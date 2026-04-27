@@ -72,6 +72,34 @@ const RECENT_MAX = 6;
 const COMPARE_MAX = 3;
 const BOOKMARK_MAX = 50;
 
+// ── localStorage fallback ─────────────────────────────────────────────────
+// Used when the Supabase schema hasn't been migrated yet (extended columns
+// don't exist). Persists compare list, bookmarks, and scan history locally
+// so they survive page reloads even without cloud-migration.sql being run.
+
+const LOCAL_EXT_KEY = "sift-ext";
+
+function loadLocalExt(): Partial<Pick<UserData, "scanHistory" | "scanCount" | "compareList" | "bookmarks" | "recentSearches">> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(LOCAL_EXT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveLocalExt(data: UserData): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_EXT_KEY, JSON.stringify({
+      scanHistory: data.scanHistory,
+      scanCount: data.scanCount,
+      compareList: data.compareList,
+      bookmarks: data.bookmarks,
+      recentSearches: data.recentSearches,
+    }));
+  } catch { /* quota exceeded — ignore */ }
+}
+
 // ── Row <-> UserData mapping ──────────────────────────────────────────────
 
 // user_profiles row is typed loosely because the Supabase generated types
@@ -170,7 +198,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     if (!user) {
       const localOnboarded =
         typeof window !== "undefined" && localStorage.getItem("sift-onboarded") === "1";
-      const base = { ...EMPTY, onboarded: localOnboarded };
+      const base = { ...EMPTY, ...loadLocalExt(), onboarded: localOnboarded };
       setData(base);
       dataRef.current = base;
       userIdRef.current = null;
@@ -180,14 +208,22 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     }
 
     userIdRef.current = user.id;
+
+    // Pre-populate from localStorage immediately so any mutations that fire
+    // during the async DB load (e.g. recordScan on product page mount) read
+    // the correct prior state instead of EMPTY, preventing compareList /
+    // bookmarks from being silently overwritten with empty arrays.
+    const localOnboarded =
+      typeof window !== "undefined" && localStorage.getItem("sift-onboarded") === "1";
+    {
+      const interim: UserData = { ...EMPTY, ...loadLocalExt(), onboarded: localOnboarded };
+      setData(interim);
+      dataRef.current = interim;
+    }
+
     let cancelled = false;
 
     const load = async () => {
-      // Carry over the localStorage flag set during anonymous onboarding so
-      // that signing in with Google (new user_id) doesn't re-show onboarding.
-      const localOnboarded =
-        typeof window !== "undefined" && localStorage.getItem("sift-onboarded") === "1";
-
       // Try the full query first (requires cloud-migration.sql to have been run).
       // If extended columns don't exist (code 42703), fall back to basic columns
       // so login always works even before the migration is applied.
@@ -229,30 +265,60 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       if (!row) {
         // First time for this user_id — create row, carrying over the
         // localStorage flag so a returning user who just signed in isn't
-        // shown onboarding again.
-        // Try inserting with extended columns; if migration not yet run (42703),
-        // retry with only the basic columns that are guaranteed to exist.
+        // shown onboarding again. dataRef.current at this point already
+        // holds the guest's localStorage data (loaded into the interim
+        // state above) — preserve it across the guest→signed-in
+        // transition and seed the new row with it so the user keeps
+        // their compare list, bookmarks, and scan history.
+        const guestState = dataRef.current;
+        const displayName = user.user_metadata?.full_name || user.email || "You";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const db = supabase.from("user_profiles") as unknown as any;
         let { error: insErr } = await db.insert({
           user_id: user.id,
-          display_name: user.user_metadata?.full_name || user.email || "You",
+          display_name: displayName,
           ...(localOnboarded && { onboarded: true }),
+          scan_history: guestState.scanHistory,
+          scan_count: guestState.scanCount,
+          recent_searches: guestState.recentSearches,
+          compare_list: guestState.compareList,
+          bookmarks: guestState.bookmarks,
         });
         if (insErr?.code === "42703") {
+          // Extended columns not present yet — fall back to the basic
+          // schema. Guest extended state stays in localStorage for the
+          // schemaOutdated branch on next load to pick up.
           ({ error: insErr } = await db.insert({
             user_id: user.id,
-            display_name: user.user_metadata?.full_name || user.email || "You",
+            display_name: displayName,
           }));
         }
         if (insErr && insErr.code !== "23505") { // 23505 = unique_violation on race
           console.warn("user_profiles insert failed:", insErr.message);
         }
-        const base = { ...EMPTY, onboarded: localOnboarded };
+        const base: UserData = {
+          ...guestState,
+          onboarded: guestState.onboarded || localOnboarded,
+        };
         setData(base);
         dataRef.current = base;
       } else {
         const parsed = rowToData(row as Row);
+        // If the extended columns were absent from the row (schema not yet
+        // migrated), compare_list and scan_history come back null — merge from
+        // localStorage so state survives page reloads in that case.
+        const schemaOutdated = (row as Row).compare_list == null && (row as Row).scan_history == null;
+        if (schemaOutdated) {
+          // Use dataRef.current rather than re-reading localStorage.
+          // dataRef reflects any mutations (recordScan, addToCompare) that
+          // fired while the DB query was in-flight, so we preserve them
+          // instead of overwriting with a stale localStorage snapshot.
+          parsed.compareList = dataRef.current.compareList;
+          parsed.bookmarks = dataRef.current.bookmarks;
+          parsed.scanHistory = dataRef.current.scanHistory;
+          parsed.scanCount = dataRef.current.scanCount;
+          parsed.recentSearches = dataRef.current.recentSearches;
+        }
         // DB row says not onboarded but this browser completed onboarding
         // while anonymous — trust localStorage and sync it back to DB.
         if (!parsed.onboarded && localOnboarded) {
@@ -273,16 +339,20 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   }, [user, authLoading, authAvailable]);
 
   // Helper: optimistic update + DB write. Reverts on failure.
+  // For non-logged-in users the local state update is still applied; only the
+  // DB write is skipped so compare/bookmarks/history work for guests too.
   const mutate = useCallback(
     async (
       producer: (prev: UserData) => { next: UserData; dbPatch: Record<string, unknown> },
     ) => {
       const uid = userIdRef.current;
-      if (!uid) return;
       const prev = dataRef.current;
       const { next, dbPatch } = producer(prev);
+      // Apply optimistic update regardless of auth state.
       setData(next);
       dataRef.current = next;
+      // For guests: persist extended state to localStorage and skip DB write.
+      if (!uid) { saveLocalExt(next); return; }
       // Update only — the load() effect creates the row up-front, so we
       // don't need upsert here. Crucially, an upsert would force us to
       // include display_name (NOT NULL), which would overwrite the user's
@@ -294,7 +364,19 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
         .update(dbPatch)
         .eq("user_id", uid);
       if (updateErr) {
-        // Revert on failure so UI stays consistent with server.
+        // PGRST204 = PostgREST "column not found in schema cache". This means
+        // cloud-migration.sql hasn't been run yet. Persist to localStorage so
+        // state survives reloads; don't revert or throw.
+        if (
+          updateErr.code === "PGRST204" ||
+          updateErr.code === "42703" ||
+          updateErr.message?.includes("schema cache")
+        ) {
+          saveLocalExt(next);
+          console.warn("user_profiles schema outdated — run docs/cloud-migration.sql:", updateErr.message);
+          return;
+        }
+        // For other DB errors, revert so UI stays consistent with server.
         setData(prev);
         dataRef.current = prev;
         throw new Error(updateErr.message);
