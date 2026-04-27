@@ -283,12 +283,16 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       const { next, dbPatch } = producer(prev);
       setData(next);
       dataRef.current = next;
-      // Upsert instead of update: if the profile row doesn't exist yet
-      // (e.g. insert failed silently during load), this still saves the data.
+      // Update only — the load() effect creates the row up-front, so we
+      // don't need upsert here. Crucially, an upsert would force us to
+      // include display_name (NOT NULL), which would overwrite the user's
+      // real name (set from full_name/email at row creation) with "You"
+      // on every mutation.
       const { error: updateErr } = await supabase
         .from("user_profiles")
         // @ts-expect-error generated types miss new JSONB columns
-        .upsert({ user_id: uid, display_name: "You", ...dbPatch }, { onConflict: "user_id" });
+        .update(dbPatch)
+        .eq("user_id", uid);
       if (updateErr) {
         // Revert on failure so UI stays consistent with server.
         setData(prev);
