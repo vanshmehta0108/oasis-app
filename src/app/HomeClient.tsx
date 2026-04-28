@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Camera, ChevronRight, TrendingDown, Shield, ShieldAlert, Scale,
   UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby, Home as HomeIcon, Package, UserCircle2
@@ -11,12 +11,12 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { Onboarding } from "@/components/Onboarding";
 import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
-import { getTrendingProducts, getWorstRated, getRecentProducts, getProductCount, getFlaggedCount, getCategoryCounts } from "@/lib/db";
+import { getTrendingProducts, getWorstRated, getRecentProducts, getCategoryCounts } from "@/lib/db";
 import { useUserData } from "@/lib/userData";
 import { useUser } from "@/lib/useUser";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const stagger = {
   hidden: {},
@@ -30,11 +30,9 @@ const fadeUp = {
 
 function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
   const [count, setCount] = useState(0);
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true });
 
   useEffect(() => {
-    if (!inView) return;
+    if (target === 0) return;
     const duration = 1000;
     const start = performance.now();
     let frame: number;
@@ -46,9 +44,9 @@ function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: str
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [inView, target]);
+  }, [target]);
 
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
+  return <span>{count.toLocaleString()}{suffix}</span>;
 }
 
 const categoryIconMap: Record<string, { Icon: React.ElementType; bg: string; color: string }> = {
@@ -107,8 +105,13 @@ export default function HomeClient() {
     getRecentProducts(4)
       .then((d) => setRecentlyAdded(d.map((p) => mapDbProduct(p as unknown as Record<string, unknown>))))
       .catch((e) => console.error("Failed to load recent:", e));
-    getProductCount().then(setProductCount).catch(() => setProductCount(0));
-    getFlaggedCount().then(setFlaggedCount).catch(() => setFlaggedCount(0));
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then(({ productCount, flaggedCount }) => {
+        setProductCount(productCount ?? 0);
+        setFlaggedCount(flaggedCount ?? 0);
+      })
+      .catch(() => {});
     getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
   }, []);
 

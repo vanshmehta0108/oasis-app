@@ -1,20 +1,64 @@
 {
+  "id": "/",
   "name": "Sift — Know What's In Your Food",
   "short_name": "Sift",
   "description": "India's AI-powered product safety scanner. Scan any barcode for instant safety scores.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#F2F2F7",
   "theme_color": "#007AFF",
   "orientation": "portrait",
   "scope": "/",
   "categories": ["health", "food", "lifestyle"],
   "lang": "en-IN",
+  "dir": "ltr",
   "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icons/icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Home screen showing trending products"
+    },
+    {
+      "src": "/screenshots/product.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Product safety score and ingredient analysis"
     }
   ],
   "share_target": {
@@ -38,13 +82,17 @@
       "name": "Scan a product",
       "short_name": "Scan",
       "url": "/scan",
-      "description": "Open the camera and scan a barcode or ingredient label"
+      "description": "Open the camera and scan a barcode or ingredient label",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Search products",
       "short_name": "Search",
       "url": "/search",
-      "description": "Find a product by name or brand"
+      "description": "Find a product by name or brand",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
-  ]
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
 }

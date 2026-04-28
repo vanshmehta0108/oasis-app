@@ -48,14 +48,14 @@ export const metadata: Metadata = {
     "sift app",
   ],
   manifest: "/manifest.json",
-  metadataBase: new URL("https://sift.app"),
+  metadataBase: new URL("https://sift-india.vercel.app"),
   alternates: { canonical: "/" },
   openGraph: {
     title: "Sift — Know What's Really in Your Food",
     description:
       "India's AI-powered product safety scanner. Scan any barcode or ingredient list to get instant safety scores and healthier alternatives.",
     type: "website",
-    url: "https://sift.app",
+    url: "https://sift-india.vercel.app",
     siteName: "Sift",
     locale: "en_IN",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Sift - India's AI Product Safety App" }],
@@ -67,6 +67,19 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Sift" },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "mask-icon", url: "/icons/icon.svg" },
+    ],
+  },
   robots: { index: true, follow: true },
 };
 
@@ -84,7 +97,7 @@ const jsonLd = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} data-scroll-behavior="smooth">
       <head>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </head>

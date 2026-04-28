@@ -64,6 +64,7 @@ export async function getTopRatedInCategory(
     .eq("category", dbCat as ProductCategory)
     .or(PUBLIC_ONLY)
     .not("safety_score", "is", null)
+    .gt("safety_score", 0)
     .neq("barcode", excludeBarcode)
     .order("safety_score", { ascending: false })
     .limit(limit);
@@ -98,35 +99,43 @@ export async function searchProducts(
   category?: string,
   limit = 20
 ): Promise<Product[]> {
-  // Escape PostgREST .or() filter metacharacters. Commas split clauses,
-  // parentheses group them, and backslashes escape — all must be sanitized
-  // so special characters in product names don't break the query.
+  // Escape PostgREST .or() filter metacharacters.
   const safe = query.replace(/[,()\\]/g, " ").replace(/\s+/g, " ").trim();
-  let q = supabase
-    .from("products")
-    .select("*")
-    .or(`name.ilike.%${safe}%,brand.ilike.%${safe}%,barcode.eq.${safe}`)
-    .or(PUBLIC_ONLY)
-    .limit(limit);
 
-  if (category && category !== "All") {
-    const categoryMap: Record<string, string> = {
-      Food: "food",
-      Beverages: "beverage",
-      Snacks: "snack",
-      Skincare: "skincare",
-      Baby: "baby_food",
-      Household: "household",
-    };
-    const dbCat = categoryMap[category] || category.toLowerCase();
-    q = q.eq("category", dbCat as ProductCategory);
+  const categoryMap: Record<string, string> = {
+    Food: "food", Beverages: "beverage", Snacks: "snack",
+    Skincare: "skincare", Baby: "baby_food", Household: "household",
+  };
+
+  function buildQuery(pattern: string) {
+    let q = supabase
+      .from("products")
+      .select("*")
+      .or(`name.ilike.${pattern},brand.ilike.${pattern},barcode.eq.${safe}`)
+      .or(PUBLIC_ONLY)
+      .limit(limit);
+    if (category && category !== "All") {
+      const dbCat = categoryMap[category] || category.toLowerCase();
+      q = q.eq("category", dbCat as ProductCategory);
+    }
+    return q.order("scan_count", { ascending: false });
   }
 
-  const { data, error } = await q.order("scan_count", { ascending: false });
+  // Try prefix-match first (uses B-tree index, avoids full-table scan).
+  // If fewer than 3 results, fall back to contains-match for broader coverage.
+  const { data: prefixData, error: prefixErr } = await buildQuery(`${safe}%`);
+  if (!prefixErr && (prefixData?.length ?? 0) >= 3) {
+    return (prefixData as Product[]) ?? [];
+  }
 
+  const { data, error } = await buildQuery(`%${safe}%`);
   if (error) {
+    if (error.message?.includes("statement timeout") || error.message?.includes("canceling")) {
+      // Return prefix results on timeout rather than empty
+      return (prefixData as Product[]) ?? [];
+    }
     console.error("Search failed:", error.message);
-    return [];
+    return (prefixData as Product[]) ?? [];
   }
   return (data as Product[]) ?? [];
 }
@@ -149,6 +158,7 @@ export async function getWorstRated(limit = 4): Promise<Product[]> {
     .select("*")
     .or(PUBLIC_ONLY)
     .not("safety_score", "is", null)
+    .gt("safety_score", 0)
     .order("safety_score", { ascending: true })
     .limit(limit);
   return (data as Product[]) ?? [];
@@ -168,7 +178,9 @@ export async function getProductCount(): Promise<number> {
   const { count } = await supabase
     .from("products")
     .select("*", { count: "exact", head: true })
-    .or(PUBLIC_ONLY);
+    .or(PUBLIC_ONLY)
+    .not("safety_score", "is", null)
+    .gt("safety_score", 0);
   return count || 0;
 }
 
@@ -177,6 +189,7 @@ export async function getFlaggedCount(): Promise<number> {
     .from("products")
     .select("*", { count: "exact", head: true })
     .or(PUBLIC_ONLY)
+    .gt("safety_score", 0)
     .lt("safety_score", 50);
   return count || 0;
 }

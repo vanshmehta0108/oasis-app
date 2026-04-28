@@ -43,8 +43,8 @@ interface OFFResult {
   brand: string;
   category: string;
   ingredients: string[];
-  safety_score: number;
-  grade: "A" | "B" | "C" | "D" | "E";
+  safety_score: null;
+  grade: null;
   image_url: string;
   analysis: { summary: string; ingredients: []; warnings: []; healthier_alternative: string };
 }
@@ -83,6 +83,7 @@ function SearchContent() {
   const [offResults, setOffResults] = useState<OFFResult[]>([]);
   const [offLoading, setOffLoading] = useState(false);
   const [offError, setOffError] = useState(false);
+  const [dbError, setDbError] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout>(null);
 
   const handleSearch = useCallback((q: string) => setQuery(q), []);
@@ -127,16 +128,21 @@ function SearchContent() {
       setDbLoading(true);
       setOffLoading(true);
       setOffError(false);
+      setDbError(false);
 
       // Supabase search — show results immediately, don't block on OFF
       searchSupabase(query, category === "All" ? undefined : category)
         .then((supaResults) => {
           if (gen !== searchGen.current) return;
           setDbResults(supaResults.map((d) => mapDbToProduct(d as unknown as Record<string, unknown>)));
+          setDbError(false);
         })
-        .catch(() => {
+        .catch((err: Error) => {
           if (gen !== searchGen.current) return;
           setDbResults([]);
+          if (err?.message?.includes("timeout") || err?.message?.includes("canceling")) {
+            setDbError(true);
+          }
         })
         .finally(() => {
           if (gen === searchGen.current) setDbLoading(false);
@@ -162,8 +168,8 @@ function SearchContent() {
               brand: p.brands || "Unknown",
               category: mapOFFCategory(p.categories),
               ingredients: p.ingredients_text ? p.ingredients_text.split(/,\s*/).filter(Boolean) : [],
-              safety_score: 0,
-              grade: "C" as const,
+              safety_score: null,
+              grade: null,
               image_url: p.image_url || "",
               analysis: { summary: "Tap to analyze", ingredients: [], warnings: [], healthier_alternative: "" },
             }));
@@ -293,6 +299,11 @@ function SearchContent() {
             {results.map((p, i) => (
               <ProductCard key={p.id} product={p} index={i} />
             ))}
+            {dbError && !dbLoading && (
+              <p className="text-[11px] text-center py-2" style={{ color: "#FF9F0A" }}>
+                Search timed out — try a shorter or more specific term
+              </p>
+            )}
             {offError && !offLoading && (
               <p className="text-[11px] text-center text-oasis-muted py-2">
                 Couldn&apos;t reach OpenFoodFacts — showing local results only
