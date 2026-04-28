@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, X, Scale, Plus, Trophy, AlertTriangle, ShieldCheck, Info } from "lucide-react";
 import Link from "next/link";
 import { ScoreRing } from "@/components/ScoreRing";
-import { useUserData, LIMITS, type CompareItem } from "@/lib/userData";
+import { useUserData, hasPersonalization, LIMITS, type CompareItem } from "@/lib/userData";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t, type Language } from "@/lib/i18n";
 import { getProductById } from "@/lib/db";
@@ -24,6 +24,7 @@ interface FullProduct {
   name: string;
   brand: string;
   safety_score: number | null;
+  ingredients?: string[];
   analysis?: {
     summary?: string;
     ingredients?: IngredientAnalysis[];
@@ -131,6 +132,8 @@ export default function ComparePage() {
 
   const [fullProducts, setFullProducts] = useState<(FullProduct | null)[]>([]);
   const [loading, setLoading] = useState(false);
+  const [personalWarnings, setPersonalWarnings] = useState<Record<string, string[]>>({});
+  const [personalLoading, setPersonalLoading] = useState(false);
 
   // Strip the "off-" / "web-" routing prefix before looking up in the DB,
   // since those products are stored under their bare barcode.
@@ -147,6 +150,41 @@ export default function ComparePage() {
       .then((results) => setFullProducts(results as (FullProduct | null)[]))
       .finally(() => setLoading(false));
   }, [items]);
+
+  const profileKey = JSON.stringify([data.profile.conditions, data.profile.allergies]);
+  useEffect(() => {
+    if (!hasPersonalization(data.profile) || fullProducts.length === 0) {
+      setPersonalWarnings({});
+      return;
+    }
+    const controllers: AbortController[] = [];
+    setPersonalLoading(true);
+    Promise.all(
+      fullProducts.map((product) => {
+        if (!product?.ingredients?.length) return Promise.resolve({ id: product?.id ?? "", warnings: [] as string[] });
+        const ctrl = new AbortController();
+        controllers.push(ctrl);
+        return fetch("/api/personalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ingredients: product.ingredients, conditions: data.profile.conditions, allergies: data.profile.allergies }),
+          signal: ctrl.signal,
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((d) => ({ id: product.id, warnings: Array.isArray(d?.warnings) ? d.warnings as string[] : [] }))
+          .catch((err) => {
+            if (err?.name === "AbortError") return null;
+            return { id: product.id, warnings: [] as string[] };
+          });
+      })
+    ).then((results) => {
+      const map: Record<string, string[]> = {};
+      results.forEach((r) => { if (r) map[r.id] = r.warnings; });
+      setPersonalWarnings(map);
+    }).finally(() => setPersonalLoading(false));
+    return () => controllers.forEach((c) => c.abort());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullProducts, profileKey]);
 
   const winner = pickWinner(items);
   const n = items.length;
@@ -371,6 +409,42 @@ export default function ComparePage() {
               </Section>
             )}
 
+            {/* ── Personalized warnings ── */}
+            {hasPersonalization(data.profile) && fullProducts.length > 0 && (
+              personalLoading ? (
+                <div className="rounded-2xl bg-white border border-black/[0.06] px-4 py-3 flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full border-2 border-[#FF9F0A]/30 border-t-[#FF9F0A] animate-spin shrink-0" />
+                  <span className="text-[11px] text-oasis-muted">Checking for your health conditions…</span>
+                </div>
+              ) : Object.values(personalWarnings).some((ws) => ws.length > 0) && (
+                <Section title="Warnings for You" icon={<AlertTriangle size={14} />}>
+                  <ColGrid n={n}>
+                    {fullProducts.map((product, i) => {
+                      const ws = product ? (personalWarnings[product.id] ?? []) : [];
+                      return (
+                        <div key={items[i].id} className="px-3 py-3 space-y-1">
+                          {ws.length === 0 ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#34C759]" />
+                              <span className="text-[11px] text-[#34C759] font-medium">No issues</span>
+                            </div>
+                          ) : ws.slice(0, 3).map((w, wi) => (
+                            <div key={wi} className="flex items-start gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#FF6B00] mt-1.5 shrink-0" />
+                              <span className="text-[10px] text-oasis-text leading-relaxed line-clamp-2">{w}</span>
+                            </div>
+                          ))}
+                          {ws.length > 3 && (
+                            <span className="text-[10px] text-oasis-muted">+{ws.length - 3} more</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </ColGrid>
+                </Section>
+              )
+            )}
+
             {/* ── Nutrition ── */}
             {fullProducts.some(p => p?.nutritional_info && Object.keys(p.nutritional_info).length > 0) && (
               <Section title="Nutrition (per 100g)" icon={<Info size={14} />}>
@@ -432,6 +506,16 @@ export default function ComparePage() {
                   ))}
                 </ColGrid>
               </Section>
+            )}
+
+            {/* ── Profile hint ── */}
+            {!hasPersonalization(data.profile) && items.length > 0 && (
+              <Link href="/profile" className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-[#FFF9EC] border border-[#FF9F0A]/20">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[#FF9F0A]" />
+                <p className="text-[11px] text-[#7A5700] leading-relaxed">
+                  Add your health conditions and allergies in <span className="font-semibold">Profile</span> to see personalised warnings for each product.
+                </p>
+              </Link>
             )}
 
             {/* ── Add another ── */}
