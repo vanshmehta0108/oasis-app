@@ -48,3 +48,4 @@ scripts/*.jsonl.gz
 scripts/.fix-score-checkpoint.json
 scripts/.import-checkpoint.json
 .env*.local
+src/data/master-products.json

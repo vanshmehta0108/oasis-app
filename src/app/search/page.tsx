@@ -82,6 +82,7 @@ function SearchContent() {
   const [dbLoading, setDbLoading] = useState(false);
   const [offResults, setOffResults] = useState<OFFResult[]>([]);
   const [offLoading, setOffLoading] = useState(false);
+  const [offError, setOffError] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout>(null);
 
   const handleSearch = useCallback((q: string) => setQuery(q), []);
@@ -125,6 +126,7 @@ function SearchContent() {
     debounceRef.current = setTimeout(async () => {
       setDbLoading(true);
       setOffLoading(true);
+      setOffError(false);
 
       // Supabase search — show results immediately, don't block on OFF
       searchSupabase(query, category === "All" ? undefined : category)
@@ -167,7 +169,9 @@ function SearchContent() {
             }));
           setOffResults(mapped);
         })
-        .catch(() => { /* ignore abort/network */ })
+        .catch((err: { name?: string }) => {
+          if (err?.name !== "AbortError" && gen === searchGen.current) setOffError(true);
+        })
         .finally(() => {
           if (gen === searchGen.current) setOffLoading(false);
         });
@@ -289,6 +293,11 @@ function SearchContent() {
             {results.map((p, i) => (
               <ProductCard key={p.id} product={p} index={i} />
             ))}
+            {offError && !offLoading && (
+              <p className="text-[11px] text-center text-oasis-muted py-2">
+                Couldn&apos;t reach OpenFoodFacts — showing local results only
+              </p>
+            )}
           </motion.div>
         )}
       </div>
