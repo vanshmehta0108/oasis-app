@@ -254,7 +254,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       body: JSON.stringify({ ingredients, category: category || "food", lang, ...(barcode ? { barcode } : {}) }),
     })
       .then(async (res) => {
-        if (!res.ok) { console.error("analyze failed", res.status); return; }
+        if (!res.ok) { showToast("Analysis failed — please try again", "error"); return; }
         await readSSE(res, gen, (data) => {
           if (data.type === "progress" && typeof data.message === "string") {
             setAnalyzingMessage(data.message);
@@ -272,7 +272,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
           }
         });
       })
-      .catch(console.error)
+      .catch(() => {
+        if (gen === loaderGen.current) showToast("Analysis failed — please try again", "error");
+      })
       .finally(() => {
         if (gen === loaderGen.current) setAnalyzing(false);
       });
@@ -953,7 +955,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 } else {
                   navigator.clipboard?.writeText(window.location.href).then(() => {
                     showToast("Link copied!", "success");
-                  }).catch(() => {});
+                  }).catch(() => {
+                    showToast("Couldn't copy — try manually copying the URL", "error");
+                  });
                 }
               }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white border border-black/[0.08] active:bg-[#F2F2F7] transition-colors"
