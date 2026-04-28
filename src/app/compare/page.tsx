@@ -414,10 +414,10 @@ export default function ComparePage() {
               personalLoading ? (
                 <div className="rounded-2xl bg-white border border-black/[0.06] px-4 py-3 flex items-center gap-2">
                   <div className="w-4 h-4 rounded-full border-2 border-[#FF9F0A]/30 border-t-[#FF9F0A] animate-spin shrink-0" />
-                  <span className="text-[11px] text-oasis-muted">Checking for your health conditions…</span>
+                  <span className="text-[11px] text-oasis-muted">{t("checking_profile", language)}</span>
                 </div>
               ) : Object.values(personalWarnings).some((ws) => ws.length > 0) && (
-                <Section title="Warnings for You" icon={<AlertTriangle size={14} />}>
+                <Section title={t("warnings_for_you", language)} icon={<AlertTriangle size={14} />}>
                   <ColGrid n={n}>
                     {fullProducts.map((product, i) => {
                       const ws = product ? (personalWarnings[product.id] ?? []) : [];

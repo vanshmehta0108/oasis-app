@@ -231,7 +231,7 @@ export default function ProfilePage() {
     const next = selectedConditions.includes(c)
       ? selectedConditions.filter((x) => x !== c)
       : [...selectedConditions, c];
-    void setProfile({ conditions: next });
+    setProfile({ conditions: next }).catch(() => showToast("Couldn't save — please try again", "error"));
   };
 
   const COMMON_ALLERGENS = ["Peanuts", "Milk", "Gluten", "Soy", "Eggs", "Tree Nuts", "Shellfish", "Fish", "Wheat", "Sulfites", "Sesame", "Mustard"];
@@ -240,22 +240,22 @@ export default function ProfilePage() {
     const trimmed = (value ?? allergyInput).trim();
     if (!trimmed || allergies.includes(trimmed)) return;
     setAllergyInput("");
-    void setProfile({ allergies: [...allergies, trimmed] });
+    setProfile({ allergies: [...allergies, trimmed] }).catch(() => showToast("Couldn't save — please try again", "error"));
   };
 
   const addFromDropdown = (value: string) => {
     setAllergyDropdown("");
     if (value && !allergies.includes(value)) {
-      void setProfile({ allergies: [...allergies, value] });
+      setProfile({ allergies: [...allergies, value] }).catch(() => showToast("Couldn't save — please try again", "error"));
     }
   };
 
   const removeAllergy = (a: string) => {
-    void setProfile({ allergies: allergies.filter((x) => x !== a) });
+    setProfile({ allergies: allergies.filter((x) => x !== a) }).catch(() => showToast("Couldn't save — please try again", "error"));
   };
 
   const setLanguage = (lang: "English" | "Hindi") => {
-    void setProfile({ language: lang });
+    setProfile({ language: lang }).catch(() => showToast("Couldn't save — please try again", "error"));
     setLanguageContext(lang === "English" ? "en" : "hi");
   };
 
