@@ -42,10 +42,14 @@ next-env.d.ts
 
 # large data files — never deploy or commit
 Oasis-*
+data/
 scripts/.off-dump.jsonl.gz
 scripts/.obf-dump.jsonl.gz
 scripts/*.jsonl.gz
-scripts/.fix-score-checkpoint.json
-scripts/.import-checkpoint.json
+scripts/.deltas/
+scripts/.*-checkpoint.json
+scripts/.recategorize-snapshot-*.json
+scripts/.recategorize-review-queue.json
+supabase/.temp/
 .env*.local
 src/data/master-products.json
