@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sift — Monetization Strategy 2026</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --green: #1E8040;
+    --blue: #007AFF;
+    --orange: #FF9F0A;
+    --red: #FF3B30;
+    --bg: #F2F2F7;
+    --card: #ffffff;
+    --text: #1C1C1E;
+    --muted: #8E8E93;
+    --sep: rgba(60,60,67,0.12);
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    background: #000;
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* Slide container */
+  .slides { width: 100%; height: 100vh; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: 60px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease;
+    background: var(--bg);
+  }
+  .slide.active { opacity: 1; pointer-events: all; }
+
+  /* Nav */
+  .nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; z-index: 100;
+    background: rgba(255,255,255,0.85); backdrop-filter: blur(20px);
+    border: 1px solid var(--sep); border-radius: 100px;
+    padding: 10px 20px;
+  }
+  .nav button {
+    background: none; border: none; cursor: pointer;
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text); font-size: 16px; transition: background 0.2s;
+  }
+  .nav button:hover { background: var(--sep); }
+  .nav button:disabled { opacity: 0.3; cursor: default; }
+  .nav-dots { display: flex; gap: 6px; }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted); cursor: pointer; transition: all 0.2s;
+  }
+  .dot.active { background: var(--blue); width: 18px; border-radius: 3px; }
+  .slide-count { font-size: 12px; color: var(--muted); font-weight: 500; min-width: 40px; text-align: center; }
+
+  /* Typography */
+  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); margin-bottom: 12px; }
+  .title { font-size: 48px; font-weight: 800; line-height: 1.05; color: var(--text); letter-spacing: -0.03em; }
+  .title .accent { color: var(--green); }
+  .subtitle { font-size: 20px; color: var(--muted); font-weight: 400; line-height: 1.5; margin-top: 16px; max-width: 560px; text-align: center; }
+  h2 { font-size: 34px; font-weight: 800; letter-spacing: -0.025em; color: var(--text); margin-bottom: 8px; }
+  h3 { font-size: 18px; font-weight: 700; color: var(--text); }
+  p { font-size: 14px; line-height: 1.6; color: var(--muted); }
+
+  /* Cards */
+  .card {
+    background: var(--card); border-radius: 20px;
+    padding: 24px; border: 1px solid var(--sep);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .card-grid { display: grid; gap: 16px; width: 100%; max-width: 960px; }
+  .card-grid-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  /* Revenue stream cards */
+  .stream-card { padding: 20px; border-radius: 16px; border: 1px solid var(--sep); background: white; }
+  .stream-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin-bottom: 14px;
+  }
+  .stream-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .stream-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .stream-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .stream-rev { font-size: 13px; font-weight: 700; margin-top: 12px; }
+
+  /* Tag pill */
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 100px;
+  }
+  .tag-green { background: rgba(30,128,64,0.1); color: var(--green); }
+  .tag-blue { background: rgba(0,122,255,0.1); color: var(--blue); }
+  .tag-orange { background: rgba(255,159,10,0.1); color: #B87800; }
+  .tag-red { background: rgba(255,59,48,0.1); color: var(--red); }
+
+  /* Timeline */
+  .timeline { width: 100%; max-width: 880px; }
+  .tl-item {
+    display: grid; grid-template-columns: 120px 1px 1fr;
+    gap: 0 24px; margin-bottom: 0;
+  }
+  .tl-date { font-size: 13px; font-weight: 700; color: var(--text); text-align: right; padding: 18px 0; }
+  .tl-line { background: var(--sep); position: relative; }
+  .tl-dot {
+    position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: white; border: 2px solid;
+  }
+  .tl-content { padding: 14px 0 20px; }
+  .tl-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .tl-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .tl-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+  /* Platform rows */
+  .platform-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 20px; background: white; border-radius: 14px;
+    border: 1px solid var(--sep); margin-bottom: 10px;
+  }
+  .platform-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .platform-name { font-size: 14px; font-weight: 700; color: var(--text); }
+  .platform-desc { font-size: 12px; color: var(--muted); }
+  .platform-comm { font-size: 13px; font-weight: 700; margin-left: auto; flex-shrink: 0; }
+
+  /* Razorpay plans */
+  .plan-card {
+    border-radius: 20px; padding: 24px; border: 2px solid var(--sep);
+    background: white; position: relative; overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .plan-card.featured { border-color: var(--blue); }
+  .plan-badge {
+    position: absolute; top: 16px; right: 16px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 4px 10px; border-radius: 100px;
+    background: var(--blue); color: white;
+  }
+  .plan-name { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .plan-price { font-size: 36px; font-weight: 800; color: var(--text); letter-spacing: -0.03em; }
+  .plan-price span { font-size: 16px; font-weight: 500; color: var(--muted); }
+  .plan-features { margin-top: 16px; space-y: 8px; }
+  .plan-feature { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+  .plan-feature-icon { font-size: 13px; margin-top: 1px; }
+  .plan-feature-text { font-size: 13px; color: var(--text); line-height: 1.4; }
+
+  /* Tools grid */
+  .tool-item {
+    background: white; border-radius: 14px; padding: 16px;
+    border: 1px solid var(--sep); display: flex; align-items: flex-start; gap: 12px;
+  }
+  .tool-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .tool-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .tool-use { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+  /* Revenue chart */
+  .rev-chart { display: flex; align-items: flex-end; gap: 12px; height: 120px; }
+  .rev-bar { flex: 1; border-radius: 8px 8px 0 0; position: relative; transition: opacity 0.2s; }
+  .rev-bar:hover { opacity: 0.85; }
+  .rev-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 6px; }
+  .rev-amount { position: absolute; top: -22px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+  /* Automation flow */
+  .auto-step {
+    display: flex; align-items: flex-start; gap: 16px;
+    background: white; border-radius: 14px; padding: 16px 20px;
+    border: 1px solid var(--sep); margin-bottom: 10px;
+  }
+  .auto-num {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; color: white;
+  }
+  .auto-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .auto-desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
+
+  /* Cover slide */
+  #slide-0 { background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%); }
+  #slide-0 .title { color: white; text-align: center; font-size: 56px; }
+  #slide-0 .subtitle { color: rgba(255,255,255,0.5); }
+  #slide-0 .eyebrow { color: #34C759; }
+  .logo-mark {
+    width: 80px; height: 80px; border-radius: 24px;
+    background: linear-gradient(135deg, #1E8040, #34C759);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; margin-bottom: 32px;
+    box-shadow: 0 20px 60px rgba(30,128,64,0.4);
+  }
+  .cover-meta { display: flex; gap: 32px; margin-top: 48px; }
+  .cover-stat { text-align: center; }
+  .cover-stat-num { font-size: 28px; font-weight: 800; color: white; letter-spacing: -0.03em; }
+  .cover-stat-label { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .cover-divider { width: 1px; background: rgba(255,255,255,0.1); }
+
+  /* Slide header */
+  .slide-header { width: 100%; max-width: 960px; margin-bottom: 32px; }
+  .slide-header-row { display: flex; align-items: baseline; justify-content: space-between; }
+
+  /* KPI row */
+  .kpi-row { display: flex; gap: 16px; width: 100%; max-width: 960px; margin-bottom: 24px; }
+  .kpi-card { flex: 1; background: white; border-radius: 16px; padding: 20px; border: 1px solid var(--sep); }
+  .kpi-num { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
+  .kpi-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Full-width content */
+  .full-content { width: 100%; max-width: 960px; }
+
+  /* Animate in */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .slide.active .animate { animation: fadeUp 0.5s ease forwards; }
+  .slide.active .animate:nth-child(1) { animation-delay: 0.05s; }
+  .slide.active .animate:nth-child(2) { animation-delay: 0.1s; }
+  .slide.active .animate:nth-child(3) { animation-delay: 0.15s; }
+  .slide.active .animate:nth-child(4) { animation-delay: 0.2s; }
+  .slide.active .animate:nth-child(5) { animation-delay: 0.25s; }
+
+  /* Dark nav for dark slide */
+  #slide-0 ~ .nav { background: rgba(30,30,30,0.8); border-color: rgba(255,255,255,0.1); }
+  #slide-0 ~ .nav .slide-count { color: rgba(255,255,255,0.4); }
+  #slide-0 ~ .nav button { color: white; }
+  #slide-0 ~ .nav .dot { background: rgba(255,255,255,0.3); }
+
+  .badge-live { background: rgba(52,199,89,0.15); color: #1E8040; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.05em; }
+  .badge-q2 { background: rgba(0,122,255,0.1); color: var(--blue); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+  .badge-q3 { background: rgba(255,159,10,0.1); color: #B87800; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; }
+</style>
+</head>
+<body>
+
+<div class="slides">
+
+  <!-- SLIDE 0: Cover -->
+  <div class="slide active" id="slide-0">
+    <div class="logo-mark">🌿</div>
+    <div class="eyebrow animate">Confidential · April 2026</div>
+    <h1 class="title animate">Sift <span class="accent">Monetization</span><br>Strategy</h1>
+    <p class="subtitle animate">A phased revenue plan — affiliate commerce, premium subscriptions,<br>and B2B API — built for India's fastest-growing health app.</p>
+    <div class="cover-meta animate">
+      <div class="cover-stat">
+        <div class="cover-stat-num">1,000+</div>
+        <div class="cover-stat-label">Products in DB</div>
+      </div>
+      <div class="cover-divider"></div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">₹0</div>
+        <div class="cover-stat-label">Revenue Today</div>
+      </div>
+      <div class="cover-divider"></div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">₹10L+</div>
+        <div class="cover-stat-label">Year 1 Target</div>
+      </div>
+      <div class="cover-divider"></div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">3</div>
+        <div class="cover-stat-label">Revenue Streams</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 1: Revenue Overview -->
+  <div class="slide" id="slide-1">
+    <div class="slide-header animate">
+      <div class="eyebrow">Overview</div>
+      <div class="slide-header-row">
+        <h2>Three Revenue Streams</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge-live">● NOW</span>
+          <span class="badge-q2">◎ Q2 2026</span>
+          <span class="badge-q3">◎ Q3 2026</span>
+        </div>
+      </div>
+      <p style="margin-top:6px">Start free, grow fast — layered monetisation that doesn't interrupt the core UX.</p>
+    </div>
+    <div class="card-grid card-grid-3 animate">
+      <div class="stream-card">
+        <div class="stream-icon" style="background:rgba(255,159,10,0.1)">🛒</div>
+        <div class="stream-label">Stream 1 · Immediate</div>
+        <div class="stream-title">Affiliate Commerce</div>
+        <div class="stream-desc">Deep links to Blinkit, Zepto, Amazon, and BigBasket when users view a product or its healthier alternative.</div>
+        <div class="stream-rev" style="color:#B87800">₹2–8% commission per order</div>
+        <div style="margin-top:10px"><span class="badge-live">Start Now</span></div>
+      </div>
+      <div class="stream-card" style="border: 1.5px solid var(--blue);">
+        <div class="stream-icon" style="background:rgba(0,122,255,0.1)">⭐</div>
+        <div class="stream-label">Stream 2 · Q2 2026</div>
+        <div class="stream-title">Sift Premium</div>
+        <div class="stream-desc">Subscription via Razorpay. Unlimited scans, family profiles, PDF reports, priority AI analysis. ₹99/mo or ₹799/yr.</div>
+        <div class="stream-rev" style="color:var(--blue)">₹99–299 per user/month</div>
+        <div style="margin-top:10px"><span class="badge-q2">June 2026</span></div>
+      </div>
+      <div class="stream-card">
+        <div class="stream-icon" style="background:rgba(30,128,64,0.1)">🏢</div>
+        <div class="stream-label">Stream 3 · Q3 2026</div>
+        <div class="stream-title">B2B API & Insights</div>
+        <div class="stream-desc">API access for FMCG brands, health insurers, and nutrition apps. White-label licensing. Anonymised trend data.</div>
+        <div class="stream-rev" style="color:var(--green)">₹10K–2L per month (B2B)</div>
+        <div style="margin-top:10px"><span class="badge-q3">Sep 2026</span></div>
+      </div>
+    </div>
+    <div class="kpi-row animate" style="margin-top:20px;margin-bottom:0">
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:var(--orange)">₹15K</div>
+        <div class="kpi-label">Month 3 target (affiliate)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:var(--blue)">₹60K</div>
+        <div class="kpi-label">Month 6 target (affiliate + premium)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:var(--green)">₹2.5L</div>
+        <div class="kpi-label">Month 12 target (all 3 streams)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:var(--text)">₹10L+</div>
+        <div class="kpi-label">Year 1 cumulative revenue</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 2: Affiliate Links -->
+  <div class="slide" id="slide-2">
+    <div class="slide-header animate">
+      <div class="eyebrow">Stream 1 · Affiliate Commerce</div>
+      <h2>Buy Online — Earn on Every Order</h2>
+      <p style="margin-top:6px">Already showing a "Shop Now" button. Just need affiliate tags + more platforms. Zero infra cost.</p>
+    </div>
+    <div class="full-content">
+      <div class="animate">
+        <div class="platform-row">
+          <div class="platform-icon" style="background:#F8FF00;color:#000">🟡</div>
+          <div>
+            <div class="platform-name">Blinkit</div>
+            <div class="platform-desc">10-min delivery · Deep link to search by product name · Partner API available</div>
+          </div>
+          <div class="platform-comm" style="color:var(--orange)">~2–4% commission</div>
+          <span class="tag tag-orange">Partner Program</span>
+        </div>
+        <div class="platform-row">
+          <div class="platform-icon" style="background:#9747FF;color:white">⚡</div>
+          <div>
+            <div class="platform-name">Zepto</div>
+            <div class="platform-desc">10-min delivery · URL deep-link search · Affiliate via Impact/Admitad</div>
+          </div>
+          <div class="platform-comm" style="color:var(--orange)">~3–5% commission</div>
+          <span class="tag tag-blue">Affiliate</span>
+        </div>
+        <div class="platform-row">
+          <div class="platform-icon" style="background:#FF9900;color:white">📦</div>
+          <div>
+            <div class="platform-name">Amazon / Amazon Fresh</div>
+            <div class="platform-desc">Amazon Associates India · affiliate-program.amazon.in · ?tag=YOUR_TAG on all links</div>
+          </div>
+          <div class="platform-comm" style="color:var(--green)">3–9% on Grocery</div>
+          <span class="tag tag-green">Live (add tag)</span>
+        </div>
+        <div class="platform-row">
+          <div class="platform-icon" style="background:#E31E25;color:white">🛒</div>
+          <div>
+            <div class="platform-name">BigBasket</div>
+            <div class="platform-desc">Tata-owned · Admitad network affiliate program · India's largest online grocer</div>
+          </div>
+          <div class="platform-comm" style="color:var(--orange)">~4–6% commission</div>
+          <span class="tag tag-orange">Admitad</span>
+        </div>
+      </div>
+      <div class="animate" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px">
+        <div class="card" style="padding:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Where links appear</div>
+          <ul style="font-size:12px;color:var(--muted);line-height:2;padding-left:16px">
+            <li>Product page → "Healthier Alternative" card</li>
+            <li>Product page → New "Buy Online" section</li>
+            <li>Compare page → Buy buttons per product</li>
+            <li>Search results → Quick-buy chips</li>
+          </ul>
+        </div>
+        <div class="card" style="padding:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Setup checklist</div>
+          <ul style="font-size:12px;color:var(--muted);line-height:2;padding-left:16px">
+            <li>✅ BuyOnline component built</li>
+            <li>◻ Register Amazon Associates India</li>
+            <li>◻ Apply Blinkit Partner Program</li>
+            <li>◻ Join Admitad for Zepto + BigBasket</li>
+            <li>◻ Add AFFILIATE_AMAZON_TAG to .env.local</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 3: Razorpay Premium -->
+  <div class="slide" id="slide-3">
+    <div class="slide-header animate">
+      <div class="eyebrow">Stream 2 · Razorpay Subscriptions</div>
+      <h2>Sift Premium — ₹99/month</h2>
+      <p style="margin-top:6px">Freemium gate: free users get 10 scans/month. Premium is unlimited + family + exports.</p>
+    </div>
+    <div class="card-grid card-grid-3 animate" style="max-width:960px">
+      <div class="plan-card">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">₹0</div>
+        <div class="plan-features">
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">10 scans / month</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Basic ingredient analysis</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">3-product compare</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">❌</span><span class="plan-feature-text">Scan history sync</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">❌</span><span class="plan-feature-text">Family profiles</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">❌</span><span class="plan-feature-text">PDF reports</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">❌</span><span class="plan-feature-text">Priority AI (faster)</span></div>
+        </div>
+      </div>
+      <div class="plan-card featured">
+        <div class="plan-badge">Most Popular</div>
+        <div class="plan-name">Premium</div>
+        <div class="plan-price">₹99 <span>/mo</span></div>
+        <div class="plan-features">
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Unlimited scans</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Full AI analysis + Hindi</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">5-product compare</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Scan history sync (cloud)</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Up to 3 family profiles</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Monthly PDF health report</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Priority AI (2× faster)</span></div>
+        </div>
+      </div>
+      <div class="plan-card">
+        <div class="plan-name">Family Annual</div>
+        <div class="plan-price">₹799 <span>/yr</span></div>
+        <div class="plan-features">
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">All Premium features</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Up to 6 family profiles</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Shared scan library</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">Weekly digest email</span></div>
+          <div class="plan-feature"><span class="plan-feature-icon">✅</span><span class="plan-feature-text">₹67/mo effective (32% off)</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="animate" style="max-width:960px;width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:18px">
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">Razorpay Setup</div>
+        <ul style="font-size:11px;color:var(--muted);line-height:1.9;padding-left:14px">
+          <li>Razorpay Subscriptions API</li>
+          <li>Webhook → Supabase row update</li>
+          <li>Checkout.js in-app sheet</li>
+          <li>Auto-renewal + dunning emails</li>
+        </ul>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">Gate Mechanics</div>
+        <ul style="font-size:11px;color:var(--muted);line-height:1.9;padding-left:14px">
+          <li>Scan count in Supabase profiles</li>
+          <li>Soft wall at scan 8 (upsell nudge)</li>
+          <li>Hard wall at scan 10 (paywall)</li>
+          <li>Reset on 1st of each month</li>
+        </ul>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">Revenue Model</div>
+        <ul style="font-size:11px;color:var(--muted);line-height:1.9;padding-left:14px">
+          <li>500 subs × ₹99 = ₹49,500/mo</li>
+          <li>50 annual × ₹799 = ₹39,950 upfront</li>
+          <li>Razorpay fee: 2% + ₹3</li>
+          <li>Target: 2% free→paid conversion</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4: B2B -->
+  <div class="slide" id="slide-4">
+    <div class="slide-header animate">
+      <div class="eyebrow">Stream 3 · B2B & API</div>
+      <h2>Enterprise & Data Revenue</h2>
+      <p style="margin-top:6px">Sift's ingredient analysis engine is uniquely valuable to brands, insurers, and health platforms.</p>
+    </div>
+    <div class="card-grid card-grid-2 animate" style="max-width:960px">
+      <div class="stream-card">
+        <div class="stream-icon" style="background:rgba(0,122,255,0.1)">🔌</div>
+        <div class="stream-title">API Access — FMCG Brands</div>
+        <div class="stream-desc" style="margin-top:6px">Let brands query their own products' scores and get ingredient breakdowns. Useful for reformulation, marketing claims, and R&D. Monthly API key subscription.</div>
+        <div class="stream-rev" style="color:var(--blue);margin-top:12px">₹10,000–50,000/month per brand</div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="tag tag-blue">Marico, Dabur, Nestlé</span>
+          <span class="tag tag-blue">Health Startups</span>
+        </div>
+      </div>
+      <div class="stream-card">
+        <div class="stream-icon" style="background:rgba(52,199,89,0.1)">🏥</div>
+        <div class="stream-title">Health Insurer Integration</div>
+        <div class="stream-desc" style="margin-top:6px">White-label Sift for health insurance apps. Users get food safety scores embedded in their insurance app. Revenue share or flat monthly fee. Star Health, HDFC Ergo, Niva Bupa.</div>
+        <div class="stream-rev" style="color:var(--green);margin-top:12px">₹50,000–2L/month per insurer</div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="tag tag-green">Star Health</span>
+          <span class="tag tag-green">HDFC Ergo</span>
+        </div>
+      </div>
+      <div class="stream-card">
+        <div class="stream-icon" style="background:rgba(255,159,10,0.1)">📊</div>
+        <div class="stream-title">Anonymised Trend Reports</div>
+        <div class="stream-desc" style="margin-top:6px">Aggregate data on which ingredients users flag most, scan trends by category, brand-to-brand comparison data. Sold as quarterly reports to FMCG market research firms.</div>
+        <div class="stream-rev" style="color:#B87800;margin-top:12px">₹25,000–1L per report</div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="tag tag-orange">Nielsen</span>
+          <span class="tag tag-orange">Euromonitor</span>
+        </div>
+      </div>
+      <div class="stream-card">
+        <div class="stream-icon" style="background:rgba(255,59,48,0.1)">🎯</div>
+        <div class="stream-title">Brand Certification Badge</div>
+        <div class="stream-desc" style="margin-top:6px">Brands that score A+ can display a "Sift Verified" badge on their packaging and website. Annual certification fee. Creates a virtuous cycle — brands reformulate to earn the badge.</div>
+        <div class="stream-rev" style="color:var(--red);margin-top:12px">₹25,000–1L per brand/year</div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="tag tag-red">Need 10K+ users first</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: Roadmap -->
+  <div class="slide" id="slide-5">
+    <div class="slide-header animate">
+      <div class="eyebrow">Roadmap</div>
+      <h2>12-Month Execution Plan</h2>
+      <p style="margin-top:6px">Ship fast, validate early — revenue from day one, subscriptions by June.</p>
+    </div>
+    <div class="timeline animate" style="max-width:860px">
+      <div class="tl-item">
+        <div class="tl-date" style="color:var(--green)">May 2026</div>
+        <div class="tl-line"><div class="tl-dot" style="border-color:var(--green);background:rgba(30,128,64,0.15)"></div></div>
+        <div class="tl-content">
+          <div class="tl-title">🛒 Affiliate Links Live</div>
+          <div class="tl-desc">BuyOnline component on all product pages. Amazon Associates tag active. Apply for Blinkit Partner + Admitad (Zepto, BigBasket). Track clicks with Vercel Analytics events.</div>
+          <div class="tl-tags"><span class="tag tag-green">BuyOnline component</span><span class="tag tag-green">Amazon tag</span><span class="tag tag-green">Analytics events</span></div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date" style="color:var(--blue)">Jun 2026</div>
+        <div class="tl-line"><div class="tl-dot" style="border-color:var(--blue);background:rgba(0,122,255,0.12)"></div></div>
+        <div class="tl-content">
+          <div class="tl-title">⭐ Sift Premium Launch</div>
+          <div class="tl-desc">Razorpay Subscriptions integrated. Freemium gate at 10 scans/month. Premium page, paywall modal, webhook → Supabase. Launch with 50% off first month promo code.</div>
+          <div class="tl-tags"><span class="tag tag-blue">Razorpay</span><span class="tag tag-blue">Paywall modal</span><span class="tag tag-blue">Supabase subscription table</span></div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date" style="color:var(--orange)">Jul–Aug 2026</div>
+        <div class="tl-line"><div class="tl-dot" style="border-color:var(--orange);background:rgba(255,159,10,0.12)"></div></div>
+        <div class="tl-content">
+          <div class="tl-title">📈 Growth & Retention</div>
+          <div class="tl-desc">Drip email sequences via Resend. WhatsApp scan-limit nudges. Referral program (1 month free for 3 referrals). Family plan push. Target 500 paying users.</div>
+          <div class="tl-tags"><span class="tag tag-orange">Resend emails</span><span class="tag tag-orange">Referral program</span><span class="tag tag-orange">Family plans</span></div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date" style="color:var(--text)">Sep–Dec 2026</div>
+        <div class="tl-line"><div class="tl-dot" style="border-color:var(--muted);background:rgba(142,142,147,0.12)"></div></div>
+        <div class="tl-content">
+          <div class="tl-title">🏢 B2B Outreach & API</div>
+          <div class="tl-desc">Launch API docs. Cold outreach to Marico, Dabur, Tata Consumer. Health insurer pilots. First quarterly trend report. Sift Verified badge program beta.</div>
+          <div class="tl-tags"><span class="tag tag-blue">API docs</span><span class="tag tag-blue">B2B pipeline</span><span class="tag tag-blue">Insurer pilots</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6: Automation -->
+  <div class="slide" id="slide-6">
+    <div class="slide-header animate">
+      <div class="eyebrow">Automation</div>
+      <h2>Zero-Touch Revenue Engine</h2>
+      <p style="margin-top:6px">Every step after acquisition should run without manual intervention.</p>
+    </div>
+    <div class="full-content animate">
+      <div class="auto-step">
+        <div class="auto-num" style="background:var(--orange)">1</div>
+        <div>
+          <div class="auto-title">Affiliate Link Injection — Automatic</div>
+          <div class="auto-desc">When a product page loads, <code>getAffiliateLinks(product.name, product.brand)</code> generates deep links for all 4 platforms. No manual curation. Tag appended from env var. Vercel Analytics event fires on click.</div>
+        </div>
+      </div>
+      <div class="auto-step">
+        <div class="auto-num" style="background:var(--blue)">2</div>
+        <div>
+          <div class="auto-title">Scan Counter → Paywall Trigger — Automatic</div>
+          <div class="auto-desc">Supabase edge function increments <code>scans_this_month</code> on each /api/analyze call. At scan 8, next product page shows a soft upsell banner. At scan 10, hard paywall modal fires. Resets on 1st of month via Supabase cron.</div>
+        </div>
+      </div>
+      <div class="auto-step">
+        <div class="auto-num" style="background:var(--green)">3</div>
+        <div>
+          <div class="auto-title">Razorpay Webhook → Feature Unlock — Automatic</div>
+          <div class="auto-desc">Razorpay fires <code>subscription.activated</code> → our webhook at /api/razorpay/webhook → updates <code>profiles.is_premium = true</code> and <code>premium_until</code> in Supabase. User's UI updates in real time via Supabase realtime subscription.</div>
+        </div>
+      </div>
+      <div class="auto-step">
+        <div class="auto-num" style="background:var(--red)">4</div>
+        <div>
+          <div class="auto-title">Churn Prevention Emails — Automatic</div>
+          <div class="auto-desc">Resend + Supabase cron: 3 days before premium expires → renewal reminder. On cancellation → win-back email with 20% off code. On subscription.halted (payment failure) → dunning sequence (3 emails over 7 days).</div>
+        </div>
+      </div>
+      <div class="auto-step">
+        <div class="auto-num" style="background:var(--muted)">5</div>
+        <div>
+          <div class="auto-title">Monthly Affiliate Report — Automated via Claude</div>
+          <div class="auto-desc">Claude Code scheduled task: pull click data from Vercel Analytics, pull commission estimates from affiliate dashboards, compile a one-page revenue report and email to founder@sift.app every 1st of month.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 7: Tools -->
+  <div class="slide" id="slide-7">
+    <div class="slide-header animate">
+      <div class="eyebrow">Infrastructure</div>
+      <h2>Tools & Software Needed</h2>
+      <p style="margin-top:6px">Minimal stack additions — most leverage what's already built.</p>
+    </div>
+    <div class="card-grid card-grid-4 animate" style="max-width:960px">
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#0052FF20">💳</div>
+        <div>
+          <div class="tool-name">Razorpay</div>
+          <div class="tool-use">Subscriptions, webhooks, payment modal. ₹0 setup, 2%+₹3 per txn.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#FF990020">📦</div>
+        <div>
+          <div class="tool-name">Amazon Associates</div>
+          <div class="tool-use">affiliate-program.amazon.in · Add ?tag= to all amazon.in links.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#FF000020">🎯</div>
+        <div>
+          <div class="tool-name">Admitad</div>
+          <div class="tool-use">Affiliate network for Zepto + BigBasket. Free to join.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#F8FF0020">🟡</div>
+        <div>
+          <div class="tool-name">Blinkit Partners</div>
+          <div class="tool-use">partners.blinkit.com · Apply for deep-link affiliate access.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#00C45620">✉️</div>
+        <div>
+          <div class="tool-name">Resend</div>
+          <div class="tool-use">Transactional emails. Free tier: 3K emails/month. Drip + dunning.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#3ECF8E20">🗄️</div>
+        <div>
+          <div class="tool-name">Supabase (existing)</div>
+          <div class="tool-use">Add scans_this_month, is_premium, premium_until columns. Cron for reset.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#00000015">📊</div>
+        <div>
+          <div class="tool-name">Vercel Analytics (existing)</div>
+          <div class="tool-use">Track affiliate_click events with platform + product. No extra cost.</div>
+        </div>
+      </div>
+      <div class="tool-item">
+        <div class="tool-icon" style="background:#007AFF20">🔐</div>
+        <div>
+          <div class="tool-name">Supabase Auth (existing)</div>
+          <div class="tool-use">Gate premium features server-side. Already integrated with Google OAuth.</div>
+        </div>
+      </div>
+    </div>
+    <div class="animate" style="max-width:960px;width:100%;margin-top:16px">
+      <div class="card" style="padding:16px 20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">New env vars needed</div>
+            <code style="font-size:11px;color:var(--muted);margin-top:4px;display:block">RAZORPAY_KEY_ID · RAZORPAY_KEY_SECRET · RAZORPAY_WEBHOOK_SECRET · AFFILIATE_AMAZON_TAG · RESEND_API_KEY</code>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <span class="tag tag-green">Free tier available for all tools</span>
+            <span class="tag tag-blue">No infra changes needed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 8: Revenue Projections -->
+  <div class="slide" id="slide-8">
+    <div class="slide-header animate">
+      <div class="eyebrow">Financial Model</div>
+      <h2>Revenue Projections</h2>
+      <p style="margin-top:6px">Conservative estimates. Assumes 10K MAU by month 6, 50K by month 12.</p>
+    </div>
+    <div class="full-content animate">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:16px">Monthly Revenue Ramp (₹)</div>
+          <div style="display:flex;align-items:flex-end;gap:8px;height:140px;padding-bottom:4px">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">2K</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(255,159,10,0.4);height:14px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M1</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">8K</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(255,159,10,0.5);height:28px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M2</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px">15K</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(255,159,10,0.6);height:42px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M3</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px">35K</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(0,122,255,0.5);height:70px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M4</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px">60K</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(0,122,255,0.6);height:90px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M5</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--blue);margin-bottom:4px">90K</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(0,122,255,0.7);height:112px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M6</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">1.5L</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(30,128,64,0.5);height:128px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M9</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+              <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">2.5L</div>
+              <div style="width:100%;border-radius:6px 6px 0 0;background:rgba(30,128,64,0.7);height:140px"></div>
+              <div style="font-size:10px;color:var(--muted);margin-top:4px">M12</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:rgba(255,159,10,0.6)"></div><span style="font-size:11px;color:var(--muted)">Affiliate</span></div>
+            <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:rgba(0,122,255,0.6)"></div><span style="font-size:11px;color:var(--muted)">Premium</span></div>
+            <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:rgba(30,128,64,0.7)"></div><span style="font-size:11px;color:var(--muted)">B2B</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">Key Assumptions</div>
+          <div class="card" style="padding:14px;margin-bottom:10px">
+            <div style="font-size:12px;font-weight:700;color:var(--orange);margin-bottom:4px">Affiliate (M1–M12)</div>
+            <ul style="font-size:11px;color:var(--muted);line-height:1.9;padding-left:14px">
+              <li>500 daily active users by M3</li>
+              <li>20% click-through on Buy Online</li>
+              <li>5% conversion to purchase</li>
+              <li>Avg order ₹500 × 3% commission = ₹15/order</li>
+            </ul>
+          </div>
+          <div class="card" style="padding:14px;margin-bottom:10px">
+            <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:4px">Premium (M4–M12)</div>
+            <ul style="font-size:11px;color:var(--muted);line-height:1.9;padding-left:14px">
+              <li>2% free→paid conversion</li>
+              <li>10K MAU by M4 → 200 paid users</li>
+              <li>₹99 ARPU, 85% monthly retention</li>
+              <li>Annual plan saves churn</li>
+            </ul>
+          </div>
+          <div class="card" style="padding:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px">B2B (M9–M12)</div>
+            <ul style="font-size:11px;color:var(--muted);line-height:1.9;padding-left:14px">
+              <li>1 brand API customer @ ₹25K/mo</li>
+              <li>1 insurer pilot @ ₹50K/mo</li>
+              <li>1 trend report @ ₹50K</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 9: Next Steps -->
+  <div class="slide" id="slide-9">
+    <div style="text-align:center;max-width:700px">
+      <div class="eyebrow animate">Next Steps</div>
+      <h2 class="animate" style="font-size:42px">Ship This Week</h2>
+      <p class="animate" style="font-size:16px;margin-top:12px;margin-bottom:40px">Affiliate links are already coded. Three more things unlock the full engine.</p>
+      <div class="animate" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;text-align:left">
+        <div class="card" style="padding:20px;border-left:3px solid var(--green)">
+          <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:6px">✅ Done — Deployed</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">BuyOnline Component</div>
+          <div style="font-size:12px;color:var(--muted)">Blinkit, Zepto, Amazon Fresh, BigBasket deep links on every product page. Analytics events wired.</div>
+        </div>
+        <div class="card" style="padding:20px;border-left:3px solid var(--orange)">
+          <div style="font-size:13px;font-weight:800;color:var(--orange);margin-bottom:6px">◻ This Week</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Register Affiliate Accounts</div>
+          <div style="font-size:12px;color:var(--muted)">Amazon Associates India + Admitad. Takes 3–7 days for approval. Add AFFILIATE_AMAZON_TAG to .env.local.</div>
+        </div>
+        <div class="card" style="padding:20px;border-left:3px solid var(--blue)">
+          <div style="font-size:13px;font-weight:800;color:var(--blue);margin-bottom:6px">◻ Week 2–3</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Razorpay Account + Plans</div>
+          <div style="font-size:12px;color:var(--muted)">Create Razorpay account, set up 3 subscription plans, add webhook endpoint, build the paywall modal in the app.</div>
+        </div>
+        <div class="card" style="padding:20px;border-left:3px solid var(--text)">
+          <div style="font-size:13px;font-weight:800;color:var(--muted);margin-bottom:6px">◻ Month 2</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Premium Page + Launch</div>
+          <div style="font-size:12px;color:var(--muted)">Build /premium page, integrate Razorpay Checkout.js, add scan gate logic, setup Resend for drip emails, launch.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+  <button id="prev" onclick="prevSlide()" disabled>‹</button>
+  <div class="nav-dots" id="dots"></div>
+  <button id="next" onclick="nextSlide()">›</button>
+  <span class="slide-count" id="count">1 / 10</span>
+</div>
+
+<script>
+  let current = 0;
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  const dotsContainer = document.getElementById('dots');
+
+  // Create dots
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot' + (i === 0 ? ' active' : '');
+    dot.onclick = () => goTo(i);
+    dotsContainer.appendChild(dot);
+  }
+
+  function goTo(n) {
+    slides[current].classList.remove('active');
+    dotsContainer.children[current].classList.remove('active');
+    current = Math.max(0, Math.min(n, total - 1));
+    slides[current].classList.add('active');
+    dotsContainer.children[current].classList.add('active');
+    document.getElementById('prev').disabled = current === 0;
+    document.getElementById('next').disabled = current === total - 1;
+    document.getElementById('count').textContent = `${current + 1} / ${total}`;
+  }
+
+  function nextSlide() { goTo(current + 1); }
+  function prevSlide() { goTo(current - 1); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlide();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlide();
+  });
+
+  // Touch swipe
+  let startX = 0;
+  document.addEventListener('touchstart', e => startX = e.touches[0].clientX);
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    if (dx < -50) nextSlide();
+    if (dx > 50) prevSlide();
+  });
+
+  goTo(0);
+</script>
+</body>
+</html>
