@@ -101,7 +101,9 @@ const CATEGORY_SCHEMA = {
 };
 
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
+  // Match the model the app uses today — see src/lib/ai.ts. 2.0-flash is no
+  // longer issued to new API keys; 2.5-flash is current.
+  model: "gemini-2.5-flash",
   systemInstruction: [
     "You are an Indian retail product classifier.",
     "",
