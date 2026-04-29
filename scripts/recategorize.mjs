@@ -201,6 +201,31 @@ async function run() {
   console.log(`Concurrency: ${CONCURRENCY} | Batch size: ${BATCH_SIZE} | Limit: ${LIMIT || "none"}`);
   console.log("");
 
+  // Snapshot rollback — when --apply is on, every write is preceded by an
+  // append to this JSON file. To revert, replay it: read each row, set
+  // category back to the recorded `from`. Cheap insurance against a bad
+  // batch from a prompt regression.
+  const fs = await import("fs");
+  const snapshotPath = APPLY
+    ? resolve(__dirname, `.recategorize-snapshot-${CATEGORY ?? "all"}-${Date.now()}.json`)
+    : null;
+  if (snapshotPath) {
+    fs.writeFileSync(snapshotPath, "[]");
+    console.log(`Snapshot file: ${snapshotPath}`);
+    console.log("");
+  }
+  let snapshotEntries = [];
+  function recordSnapshot(entry) {
+    snapshotEntries.push(entry);
+    if (snapshotEntries.length >= 25) flushSnapshot();
+  }
+  function flushSnapshot() {
+    if (!snapshotPath || snapshotEntries.length === 0) return;
+    const existing = JSON.parse(fs.readFileSync(snapshotPath, "utf-8"));
+    fs.writeFileSync(snapshotPath, JSON.stringify([...existing, ...snapshotEntries], null, 2));
+    snapshotEntries = [];
+  }
+
   let offset = 0;
   let processed = 0;
   let changes = 0;
@@ -256,6 +281,15 @@ async function run() {
         } else if (changed) {
           changes++;
           if (APPLY) {
+            recordSnapshot({
+              id: product.id,
+              barcode: product.barcode,
+              name: product.name,
+              from: product.category,
+              to: result.category,
+              confidence: result.confidence,
+              ts: new Date().toISOString(),
+            });
             const { error: upErr } = await sb
               .from("products")
               .update({ category: result.category })
@@ -273,14 +307,18 @@ async function run() {
     offset += BATCH_SIZE;
   }
 
+  flushSnapshot();
   console.log("");
   console.log(`Processed: ${processed} | Changes: ${changes} | Needs review: ${needsReview}`);
 
   if (reviewQueue.length > 0) {
     const out = resolve(__dirname, ".recategorize-review-queue.json");
-    const fs = await import("fs");
     fs.writeFileSync(out, JSON.stringify(reviewQueue, null, 2));
     console.log(`Review queue written to: ${out}`);
+  }
+  if (snapshotPath) {
+    console.log(`Snapshot saved: ${snapshotPath}`);
+    console.log(`To revert: node scripts/recategorize-revert.mjs ${snapshotPath}`);
   }
 }
 
