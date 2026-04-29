@@ -17,28 +17,29 @@ const sizeMap = {
 };
 
 function getScoreColor(score: number) {
-  if (score >= 75) return "#34C759"; // iOS green  — safe
-  if (score >= 55) return "#FF9F0A"; // iOS yellow — moderate
-  if (score >= 35) return "#FF6B00"; // iOS orange — concerning
-  return "#FF3B30";                   // iOS red    — unsafe
+  if (score >= 80) return "#34C759"; // A — safe
+  if (score >= 60) return "#FF9F0A"; // B — moderate
+  if (score >= 40) return "#FF6B00"; // C — concerning
+  return "#FF3B30";                   // D/E — unsafe
 }
 
 function getGradeLabel(score: number) {
-  if (score >= 75) return "Safe";
-  if (score >= 55) return "Moderate";
-  if (score >= 35) return "Concerning";
+  if (score >= 80) return "Safe";
+  if (score >= 60) return "Moderate";
+  if (score >= 40) return "Concerning";
   return "Unsafe";
 }
 
 export function ScoreRing({ score, grade, size = "md", animate = true }: ScoreRingProps) {
+  const hasScore = score != null;
   const safeScore = score ?? 0;
   const safeGrade = grade ?? "?";
   const [displayScore, setDisplayScore] = useState(animate ? 0 : safeScore);
   const cfg = sizeMap[size];
   const radius = (cfg.dim - cfg.stroke * 2) / 2;
   const circumference = 2 * Math.PI * radius;
-  const color = getScoreColor(safeScore);
-  const offset = circumference - (displayScore / 100) * circumference;
+  const color = hasScore ? getScoreColor(safeScore) : "#E5E5EA";
+  const offset = hasScore ? circumference - (displayScore / 100) * circumference : circumference;
 
   useEffect(() => {
     if (!animate) return;
@@ -61,7 +62,7 @@ export function ScoreRing({ score, grade, size = "md", animate = true }: ScoreRi
       className="relative inline-flex items-center justify-center"
       style={{ width: cfg.dim, height: cfg.dim }}
       role="img"
-      aria-label={`Safety score: ${safeScore} out of 100, Grade ${safeGrade} — ${getGradeLabel(safeScore)}`}
+      aria-label={hasScore ? `Safety score: ${safeScore} out of 100, Grade ${safeGrade} — ${getGradeLabel(safeScore)}` : "Not yet scored"}
     >
       <svg width={cfg.dim} height={cfg.dim} className="-rotate-90" aria-hidden="true">
         {/* Track */}
@@ -93,12 +94,12 @@ export function ScoreRing({ score, grade, size = "md", animate = true }: ScoreRi
       <div className="absolute flex flex-col items-center" aria-hidden="true">
         <span
           className={`${cfg.fontSize} font-bold leading-none tabular-nums`}
-          style={{ color }}
+          style={{ color: hasScore ? color : "#C7C7CC" }}
         >
-          {displayScore}
+          {hasScore ? displayScore : "—"}
         </span>
         <span className={`${cfg.gradeSize} font-semibold mt-0.5`} style={{ color: "#8E8E93" }}>
-          {safeGrade}
+          {hasScore ? safeGrade : "?"}
         </span>
       </div>
     </div>

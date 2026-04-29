@@ -1,16 +1,22 @@
 // Affiliate link generators for Indian quick-commerce platforms.
 // Set NEXT_PUBLIC_AFFILIATE_AMAZON_TAG in .env.local once you have
 // your Amazon Associates India tag (affiliate-program.amazon.in).
+//
+// Swiggy Instamart:
+//   Static deep-link search works immediately (no key needed).
+//   Live price display requires SWIGGY_API_KEY (server-side only) from
+//   Swiggy Builders Club approval → https://mcp.swiggy.com/builders/
 
 const AMAZON_TAG = process.env.NEXT_PUBLIC_AFFILIATE_AMAZON_TAG ?? "";
 
 export interface AffiliateLink {
-  platform: "blinkit" | "zepto" | "amazon" | "bigbasket";
+  platform: "blinkit" | "zepto" | "amazon" | "bigbasket" | "swiggy";
   label: string;
   url: string;
   color: string;
   bg: string;
   emoji: string;
+  badge?: string; // e.g. "₹89" — live price injected by BuyOnline after API call
 }
 
 function encodeQuery(query: string): string {
@@ -36,7 +42,18 @@ export function getAffiliateLinks(
   const amazonBase = `https://www.amazon.in/s?k=${q}`;
   const amazonUrl = AMAZON_TAG ? `${amazonBase}&tag=${AMAZON_TAG}` : amazonBase;
 
+  // Swiggy Instamart deep-link search (works without API key)
+  const swiggyUrl = `https://www.swiggy.com/instamart/search?query=${q}`;
+
   return [
+    {
+      platform: "swiggy",
+      label: "Instamart",
+      url: swiggyUrl,
+      color: "#d04e01",
+      bg: "rgba(252,88,0,0.08)",
+      emoji: "🧡",
+    },
     {
       platform: "blinkit",
       label: "Blinkit",

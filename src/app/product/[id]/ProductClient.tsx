@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, AlertTriangle, Leaf, Share2, ShieldAlert, Heart, ExternalLink, Loader2, BadgeCheck, BadgeX, Camera, UserCircle, Scale, Check, Flag, Sparkles, Package, Info, Bookmark, BookmarkCheck, ChevronRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
@@ -52,9 +53,9 @@ interface ProductData {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function getSummaryLevel(score: number) {
-  if (score >= 75) return { label: "Safe", color: "text-[#1E8040]", bg: "bg-[#F0FBF4]", border: "border-l-[#1E8040]" };
-  if (score >= 55) return { label: "Moderate", color: "text-[#B87800]", bg: "bg-[#FFF8E6]", border: "border-l-[#B87800]" };
-  if (score >= 35) return { label: "Concerning", color: "text-[#CC5200]", bg: "bg-[#FFF2E8]", border: "border-l-[#CC5200]" };
+  if (score >= 80) return { label: "Safe", color: "text-[#1E8040]", bg: "bg-[#F0FBF4]", border: "border-l-[#1E8040]" };
+  if (score >= 60) return { label: "Moderate", color: "text-[#B87800]", bg: "bg-[#FFF8E6]", border: "border-l-[#B87800]" };
+  if (score >= 40) return { label: "Concerning", color: "text-[#CC5200]", bg: "bg-[#FFF2E8]", border: "border-l-[#CC5200]" };
   return { label: "Unsafe", color: "text-[#CC1010]", bg: "bg-[#FFF0EE]", border: "border-l-[#CC1010]" };
 }
 
@@ -62,7 +63,6 @@ function getScoreColor(score: number) {
   if (score >= 80) return "#34C759";
   if (score >= 60) return "#FF9F0A";
   if (score >= 40) return "#FF6B00";
-  if (score >= 20) return "#FF3B30";
   return "#FF3B30";
 }
 
@@ -137,6 +137,7 @@ const fadeUp = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function ProductClient({ id, initialProduct }: { id: string; initialProduct?: Record<string, unknown> | null }) {
+  const router = useRouter();
   const [product, setProduct] = useState<ProductData | null>(
     initialProduct ? mapRawToProduct(initialProduct) : null
   );
@@ -766,17 +767,17 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
 
       {/* Floating back button */}
       <div className="fixed top-4 left-4 z-50">
-        <Link href="/" aria-label="Go back to home page">
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08] focus-visible:ring-2 focus-visible:ring-oasis-green"
-          >
-            <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
-            <span className="text-xs font-medium text-oasis-text">{t('back', language)}</span>
-          </motion.div>
-        </Link>
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08] focus-visible:ring-2 focus-visible:ring-oasis-green"
+        >
+          <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
+          <span className="text-xs font-medium text-oasis-text">{t('back', language)}</span>
+        </motion.button>
       </div>
 
       {/* Floating bookmark button (top-right, mirrors Oasis) */}
@@ -934,7 +935,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => {
-                const text = `I scanned ${product.name} on Sift — it scored ${score}/100 (Grade ${grade}). ${level.label}! 🌿\n\nScan your products: ${window.location.origin}`;
+                const text = hasScore
+                  ? `I scanned ${product.name} on Sift — it scored ${score}/100 (Grade ${grade}). ${level.label}! 🌿\n\nScan yours: ${window.location.origin}`
+                  : `I checked ${product.name} on Sift 🌿\n\nScan yours: ${window.location.origin}`;
                 window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
               }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/10 border border-[#25D366]/20 hover:bg-[#25D366]/20 transition-colors"
@@ -948,8 +951,10 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
-                    title: `${product.name} — Safety Score: ${score}/100`,
-                    text: `I scanned ${product.name} on Sift. It scored ${score}/100 (Grade ${grade}). ${product.analysis?.summary || ""}`,
+                    title: hasScore ? `${product.name} — Safety Score: ${score}/100` : product.name,
+                    text: hasScore
+                      ? `I scanned ${product.name} on Sift. It scored ${score}/100 (Grade ${grade}). ${product.analysis?.summary || ""}`
+                      : `I checked ${product.name} on Sift. ${product.analysis?.summary || ""}`,
                     url: window.location.href,
                   }).catch(() => {});
                 } else {
@@ -1190,7 +1195,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
         {/* Buy Online — affiliate links */}
         {product.name && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
-            <BuyOnline productName={product.name} brand={product.brand} />
+            <BuyOnline productName={product.name} brand={product.brand} barcode={product.barcode} />
           </motion.div>
         )}
 

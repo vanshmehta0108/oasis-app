@@ -24,6 +24,21 @@ const AnalyzeRequest = z.object({
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
+// Returns true if the extracted text looks like a nutrition facts panel rather
+// than an ingredient list. Nutrition panels contain numeric values, units, and
+// specific keywords that never appear in a real ingredient list.
+function looksLikeNutritionPanel(ingredients: string[]): boolean {
+  if (ingredients.length === 0) return false;
+  const combined = ingredients.join(" ").toLowerCase();
+  const nutritionKeywords = /serving|kcal|kj|\brda\b|nutritional|energy|carbohydrate|cholesterol|sodium|potassium|calcium|magnesium|protein|per\s*\d+\s*(ml|g)|uom|approx|values|facts|daily\s+value|\d{2,}\.\d+/;
+  return (
+    nutritionKeywords.test(combined) ||
+    ingredients.some((s) => s.trim().length > 80) ||
+    // If most tokens are numbers/units, it's a nutrition panel
+    ingredients.filter((s) => /^\d/.test(s.trim())).length > ingredients.length / 3
+  );
+}
+
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
@@ -136,7 +151,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         .single();
 
       const product = existing as Product | null;
-      if (product?.analysis) {
+      // Skip cache when an image was submitted — user is explicitly providing a new
+      // label to analyze, so we should always re-run (prevents a stale nutrition-facts
+      // scan from blocking a correct ingredient-label scan of the same barcode).
+      if (product?.analysis && !image) {
         send({ type: "complete", source: "cached", product, analysis: product.analysis, lang });
         return;
       }
@@ -156,13 +174,22 @@ export async function POST(req: NextRequest): Promise<Response> {
         return;
       }
       finalIngredients = labelData.ingredients;
+
+      // Detect nutrition facts panel instead of ingredient list
+      if (looksLikeNutritionPanel(finalIngredients)) {
+        send({
+          type: "error",
+          error: "That looks like the Nutrition Facts panel, not the ingredient list. Please scan the INGREDIENTS section — it's usually printed in smaller text below or beside the nutrition panel.",
+        });
+        return;
+      }
     }
 
     if (finalIngredients.length === 0) {
       send({
         type: "error",
         error: image
-          ? "Couldn't find an ingredient list on this label. Try framing the INGREDIENTS section directly."
+          ? "Couldn't find an ingredient list in this photo. Frame the INGREDIENTS section directly and ensure the text is clearly visible."
           : "No ingredients found. Provide an ingredients list or a clearer label image.",
       });
       return;
@@ -173,7 +200,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     let analysis;
     try {
-      analysis = await analyzeIngredients(finalIngredients, category, labelData?.fssai_license ?? null);
+      analysis = await analyzeIngredients(finalIngredients, category);
     } catch (err) {
       log.error("analyze.ingredients_fail", { ip, err: err instanceof Error ? err.message : String(err) });
       const message = err instanceof Error ? err.message : "Analysis failed";

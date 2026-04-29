@@ -233,7 +233,6 @@ const PERSONALIZED_WARNINGS_SCHEMA: Schema = {
 export async function analyzeIngredients(
   ingredients: string[],
   category: string,
-  fssaiLicense?: string | null
 ): Promise<SafetyAnalysis> {
   const client = getModel();
   const model = client.getGenerativeModel({
@@ -245,22 +244,20 @@ export async function analyzeIngredients(
     },
   });
 
-  const fssaiLine = fssaiLicense
-    ? `FSSAI License: ${fssaiLicense} (product is registered)`
-    : "FSSAI License: NOT DETECTED — unregistered or unlicensed product. Deduct 5-10 points from score and add a warning.";
-
   const prompt = [
     `Analyze the safety of this ${category} product sold in India.`,
     "",
     `Ingredients list: ${ingredients.join(", ")}`,
-    "",
-    fssaiLine,
     "",
     "For each ingredient:",
     "1. Identify its INS number if applicable",
     "2. Note FSSAI permitted limits and whether typical usage is concerning",
     "3. Flag any WHO/ICMR threshold violations",
     "4. Consider Indian dietary context (diabetes, heart disease prevalence)",
+    "",
+    "Do NOT penalise for absence of an FSSAI license number — all products sold in",
+    "Indian supermarkets and retail stores are licensed; the license is simply not",
+    "always visible in a photo of the ingredient panel.",
     "",
     "Be specific and actionable.",
   ].join("\n");

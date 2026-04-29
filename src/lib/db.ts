@@ -143,17 +143,18 @@ export async function searchProducts(
 // ── Aggregation queries (homepage) ──────────────────────────────────────────
 
 export async function getTrendingProducts(limit = 6): Promise<Product[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .select("*")
     .or(PUBLIC_ONLY)
     .order("scan_count", { ascending: false })
     .limit(limit);
+  if (error) console.error("getTrendingProducts:", error.message);
   return (data as Product[]) ?? [];
 }
 
 export async function getWorstRated(limit = 4): Promise<Product[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .select("*")
     .or(PUBLIC_ONLY)
@@ -161,47 +162,55 @@ export async function getWorstRated(limit = 4): Promise<Product[]> {
     .gt("safety_score", 0)
     .order("safety_score", { ascending: true })
     .limit(limit);
+  if (error) console.error("getWorstRated:", error.message);
   return (data as Product[]) ?? [];
 }
 
 export async function getRecentProducts(limit = 4): Promise<Product[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .select("*")
     .or(PUBLIC_ONLY)
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (error) console.error("getRecentProducts:", error.message);
   return (data as Product[]) ?? [];
 }
 
 export async function getProductCount(): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from("products")
     .select("*", { count: "exact", head: true })
     .or(PUBLIC_ONLY)
     .not("safety_score", "is", null)
     .gt("safety_score", 0);
+  if (error) console.error("getProductCount:", error.message);
   return count || 0;
 }
 
 export async function getFlaggedCount(): Promise<number> {
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from("products")
     .select("*", { count: "exact", head: true })
     .or(PUBLIC_ONLY)
     .gt("safety_score", 0)
     .lt("safety_score", 50);
+  if (error) console.error("getFlaggedCount:", error.message);
   return count || 0;
 }
 
+// Category counts — use /api/stats (server-side, service role key) for accurate counts.
+// This client-side version is only a fallback and may return 0 for large tables
+// because the anon key's statement_timeout is too short for COUNT(*) on 9k+ rows.
 export async function getCategoryCounts(): Promise<Record<string, number>> {
   const cats = ["food","beverage","snack","dairy","baby_food","skincare","haircare","cosmetic","household","water"];
   const results = await Promise.all(
     cats.map(async (cat) => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("products")
         .select("*", { count: "exact", head: true })
         .eq("category", cat);
+      if (error) console.error(`getCategoryCounts(${cat}):`, error.message);
       return [cat, count ?? 0] as const;
     })
   );

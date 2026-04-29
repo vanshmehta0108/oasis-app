@@ -19,6 +19,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const html5QrRef = useRef<unknown>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasScannedRef = useRef(false);
+  const autoShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopScanner = useCallback(async () => {
     const scanner = html5QrRef.current;
@@ -94,8 +95,15 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
     };
 
     startScanner();
+
+    // After 10 s without a scan, surface the manual entry form automatically
+    autoShowTimerRef.current = setTimeout(() => {
+      if (mountedRef.current && !hasScannedRef.current) setShowManual(true);
+    }, 10000);
+
     return () => {
       mountedRef.current = false;
+      if (autoShowTimerRef.current) clearTimeout(autoShowTimerRef.current);
       stopScanner();
     };
   }, [scanning, onScan, stopScanner]);

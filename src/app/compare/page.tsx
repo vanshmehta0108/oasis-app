@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, X, Scale, Plus, Trophy, AlertTriangle, ShieldCheck, Info } from "lucide-react";
 import Link from "next/link";
@@ -38,17 +39,17 @@ interface FullProduct {
 
 function scoreColor(score: number | null): string {
   if (score == null) return "#8E8E93";
-  if (score >= 75) return "#34C759";
-  if (score >= 55) return "#FF9F0A";
-  if (score >= 35) return "#FF6B00";
+  if (score >= 80) return "#34C759";
+  if (score >= 60) return "#FF9F0A";
+  if (score >= 40) return "#FF6B00";
   return "#FF3B30";
 }
 
 function gradeLabel(score: number | null, lang: Language): string {
   if (score == null) return t("not_scored", lang);
-  if (score >= 75) return t("safe", lang);
-  if (score >= 55) return t("grade_b", lang);
-  if (score >= 35) return t("grade_c", lang);
+  if (score >= 80) return t("safe", lang);
+  if (score >= 60) return t("grade_b", lang);
+  if (score >= 40) return t("grade_c", lang);
   return t("grade_d", lang);
 }
 
@@ -126,6 +127,7 @@ function ColGrid({ n, children }: { n: number; children: React.ReactNode }) {
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function ComparePage() {
+  const router = useRouter();
   const { data, ready, removeFromCompare, clearCompare } = useUserData();
   const { language } = useLanguage();
   const items = data.compareList;
@@ -194,17 +196,17 @@ export default function ComparePage() {
       <div className="max-w-lg mx-auto px-4 pt-14">
         {/* Header */}
         <div className="fixed top-4 left-4 z-50">
-          <Link href="/" aria-label="Go back to home">
-            <motion.div
-              whileTap={{ scale: 0.9 }}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08]"
-            >
-              <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
-              <span className="text-xs font-medium text-oasis-text">{t("back", language)}</span>
-            </motion.div>
-          </Link>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            onClick={() => router.back()}
+            aria-label="Go back"
+            className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08]"
+          >
+            <ArrowLeft size={16} className="text-oasis-text" aria-hidden="true" />
+            <span className="text-xs font-medium text-oasis-text">{t("back", language)}</span>
+          </motion.button>
         </div>
 
         <div className="flex items-center justify-between mb-1">

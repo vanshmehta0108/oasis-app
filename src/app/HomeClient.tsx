@@ -11,7 +11,7 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { Onboarding } from "@/components/Onboarding";
 import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
-import { getTrendingProducts, getWorstRated, getRecentProducts, getCategoryCounts } from "@/lib/db";
+import { getTrendingProducts, getWorstRated, getRecentProducts } from "@/lib/db";
 import { useUserData } from "@/lib/userData";
 import { useUser } from "@/lib/useUser";
 import { useLanguage } from "@/components/LanguageProvider";
@@ -107,12 +107,14 @@ export default function HomeClient() {
       .catch((e) => console.error("Failed to load recent:", e));
     fetch("/api/stats")
       .then((r) => r.json())
-      .then(({ productCount, flaggedCount }) => {
+      .then(({ productCount, flaggedCount, categoryCounts }) => {
         setProductCount(productCount ?? 0);
         setFlaggedCount(flaggedCount ?? 0);
+        if (categoryCounts && typeof categoryCounts === "object") {
+          setCatCounts(categoryCounts as Record<string, number>);
+        }
       })
       .catch(() => {});
-    getCategoryCounts().then(setCatCounts).catch(() => setCatCounts({}));
   }, []);
 
   if (!userReady) return null;

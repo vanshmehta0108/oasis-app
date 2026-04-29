@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, ShieldAlert,
@@ -41,23 +42,24 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
 const fadeUp = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
 export default function ScoringPage() {
+  const router = useRouter();
   const { language } = useLanguage();
 
   return (
     <div className="min-h-dvh pb-24" style={{ background: "#F2F2F7" }}>
       <div className="max-w-lg mx-auto px-5 pt-14">
         <div className="fixed top-4 left-4 z-50">
-          <Link href="/" aria-label="Go back to home">
-            <motion.div
-              whileTap={{ scale: 0.9 }}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08]"
-            >
-              <ArrowLeft size={16} aria-hidden="true" />
-              <span className="text-xs font-medium">{t('back', language)}</span>
-            </motion.div>
-          </Link>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            onClick={() => router.back()}
+            aria-label="Go back"
+            className="flex items-center gap-2 px-3 py-2 rounded-full glass-light border border-black/[0.08]"
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span className="text-xs font-medium">{t('back', language)}</span>
+          </motion.button>
         </div>
 
         <motion.div
