@@ -207,7 +207,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
     };
 
     const shareUrl = hasScore
-      ? `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}&score=${score}&grade=${grade}`
+      ? `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}&score=${score}&grade=${grade}&harmful=${ingredientCounts.harmful}&beneficial=${ingredientCounts.beneficial}`
       : `${window.location.origin}/api/share?name=${encodeURIComponent(product.name)}&brand=${encodeURIComponent(product.brand)}`;
     setMeta("og:title", hasScore ? `${product.name} — Safety Score: ${score}/100` : product.name);
     setMeta("og:description", product.analysis?.summary || (hasScore ? `Scanned on Sift. Grade ${grade}.` : "Scanned on Sift."));
