@@ -76,7 +76,7 @@ function pickWinner(items: CompareItem[]): CompareItem | null {
   );
 }
 
-function winnerReason(winner: FullProduct, others: FullProduct[]): string {
+function winnerReason(winner: FullProduct, others: FullProduct[], lang: Language): string {
   const parts: string[] = [];
   const score = winner.safety_score;
   if (score != null) {
@@ -85,19 +85,19 @@ function winnerReason(winner: FullProduct, others: FullProduct[]): string {
       .filter((s): s is number => s != null);
     if (otherScores.length > 0) {
       const diff = score - Math.max(...otherScores);
-      if (diff > 0) parts.push(`${diff} points safer than the nearest alternative`);
+      if (diff > 0) parts.push(t("compare_reason_safer", lang).replace("{n}", String(diff)));
     }
   }
   const wCounts = riskCounts(winner.analysis?.ingredients);
-  if (wCounts && wCounts.danger === 0) parts.push("no dangerous ingredients");
+  if (wCounts && wCounts.danger === 0) parts.push(t("compare_reason_no_danger", lang));
   const otherDangers = others.map((o) => riskCounts(o.analysis?.ingredients)?.danger ?? 0);
   if (wCounts && otherDangers.length > 0 && wCounts.danger < Math.max(...otherDangers))
-    parts.push("fewest risky ingredients");
+    parts.push(t("compare_reason_fewest", lang));
   const wWarnings = winner.analysis?.warnings?.length ?? 0;
   const otherWarningCounts = others.map((o) => o.analysis?.warnings?.length ?? 0);
   if (otherWarningCounts.length > 0 && wWarnings < Math.max(...otherWarningCounts))
-    parts.push("fewer health warnings");
-  return parts.length > 0 ? `Scores highest with ${parts.join(", ")}.` : "Highest overall safety score.";
+    parts.push(t("compare_reason_fewer_warnings", lang));
+  return parts.length > 0 ? `${t("compare_winner_lead", lang)}${parts.join(", ")}.` : t("compare_winner_default", lang);
 }
 
 // ── Section wrapper ──────────────────────────────────────────────────────────
@@ -265,9 +265,9 @@ export default function ComparePage() {
                 >
                   <Trophy size={20} className="mt-0.5 shrink-0" style={{ color: "#1E8040" }} />
                   <div>
-                    <p className="text-[13px] font-bold" style={{ color: "#1E8040" }}>Best pick: {winner.name}</p>
+                    <p className="text-[13px] font-bold" style={{ color: "#1E8040" }}>{t("best_pick", language)}: {winner.name}</p>
                     <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "#2A6B40" }}>
-                      {winnerFull ? winnerReason(winnerFull, fullProducts.filter((p, i) => p && items[i].id !== winner.id) as FullProduct[]) : "Highest overall safety score."}
+                      {winnerFull ? winnerReason(winnerFull, fullProducts.filter((p, i) => p && items[i].id !== winner.id) as FullProduct[], language) : t("compare_winner_default", language)}
                     </p>
                   </div>
                 </motion.div>
@@ -275,7 +275,7 @@ export default function ComparePage() {
             })()}
 
             {/* ── Score comparison ── */}
-            <Section title="Safety Score" icon={<ShieldCheck size={14} />}>
+            <Section title={t("compare_section_score", language)} icon={<ShieldCheck size={14} />}>
               {/* Product header row */}
               <ColGrid n={n}>
                 {items.map((item, i) => {
@@ -287,7 +287,7 @@ export default function ComparePage() {
                     >
                       <div className="flex items-center justify-between w-full mb-1">
                         <span className="text-[9px] font-semibold uppercase tracking-wide truncate max-w-[70%]" style={{ color: isBest ? "#1E8040" : "#8E8E93" }}>
-                          {isBest ? "★ Best" : ""}
+                          {isBest ? `★ ${t("compare_best_label", language)}` : ""}
                         </span>
                         <button
                           onClick={() => void removeFromCompare(item.id)}
@@ -341,7 +341,7 @@ export default function ComparePage() {
                 <div className="w-6 h-6 rounded-full border-2 border-[#007AFF]/20 border-t-[#007AFF] animate-spin" />
               </div>
             ) : fullProducts.some(p => p?.analysis?.ingredients?.length) && (
-              <Section title="Ingredient Safety" icon={<AlertTriangle size={14} />}>
+              <Section title={t("compare_section_ingredient_safety", language)} icon={<AlertTriangle size={14} />}>
                 <ColGrid n={n}>
                   {fullProducts.map((product, i) => {
                     const counts = riskCounts(product?.analysis?.ingredients);
@@ -352,28 +352,28 @@ export default function ComparePage() {
                             {counts.danger > 0 && (
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#FF3B30] shrink-0" />
-                                <span className="text-[11px] text-[#FF3B30] font-medium">{counts.danger} danger</span>
+                                <span className="text-[11px] text-[#FF3B30] font-medium">{counts.danger} {t("danger", language).toLowerCase()}</span>
                               </div>
                             )}
                             {counts.warning > 0 && (
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#FF6B00] shrink-0" />
-                                <span className="text-[11px] text-[#FF6B00] font-medium">{counts.warning} warning</span>
+                                <span className="text-[11px] text-[#FF6B00] font-medium">{counts.warning} {t("warning", language).toLowerCase()}</span>
                               </div>
                             )}
                             {counts.caution > 0 && (
                               <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[#FF9F0A] shrink-0" />
-                                <span className="text-[11px] text-[#FF9F0A] font-medium">{counts.caution} caution</span>
+                                <span className="text-[11px] text-[#FF9F0A] font-medium">{counts.caution} {t("caution", language).toLowerCase()}</span>
                               </div>
                             )}
                             <div className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#34C759] shrink-0" />
-                              <span className="text-[11px] text-[#34C759] font-medium">{counts.safe} safe</span>
+                              <span className="text-[11px] text-[#34C759] font-medium">{counts.safe} {t("safe", language).toLowerCase()}</span>
                             </div>
                           </>
                         ) : (
-                          <p className="text-[11px] text-oasis-muted">No data</p>
+                          <p className="text-[11px] text-oasis-muted">{t("compare_no_data", language)}</p>
                         )}
                       </div>
                     );
@@ -384,7 +384,7 @@ export default function ComparePage() {
 
             {/* ── Key warnings ── */}
             {fullProducts.some(p => p?.analysis?.warnings?.length) && (
-              <Section title="Key Warnings" icon={<AlertTriangle size={14} />}>
+              <Section title={t("compare_section_warnings", language)} icon={<AlertTriangle size={14} />}>
                 <ColGrid n={n}>
                   {fullProducts.map((product, i) => {
                     const warnings = product?.analysis?.warnings ?? [];
@@ -393,7 +393,7 @@ export default function ComparePage() {
                         {warnings.length === 0 ? (
                           <div className="flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-[#34C759]" />
-                            <span className="text-[11px] text-[#34C759] font-medium">None</span>
+                            <span className="text-[11px] text-[#34C759] font-medium">{t("compare_no_warnings", language)}</span>
                           </div>
                         ) : warnings.slice(0, 3).map((w, wi) => (
                           <div key={wi} className="flex items-start gap-1.5">
@@ -402,7 +402,7 @@ export default function ComparePage() {
                           </div>
                         ))}
                         {warnings.length > 3 && (
-                          <span className="text-[10px] text-oasis-muted">+{warnings.length - 3} more</span>
+                          <span className="text-[10px] text-oasis-muted">{t("compare_more_warnings", language).replace("{n}", String(warnings.length - 3))}</span>
                         )}
                       </div>
                     );
@@ -428,7 +428,7 @@ export default function ComparePage() {
                           {ws.length === 0 ? (
                             <div className="flex items-center gap-1.5">
                               <span className="w-2 h-2 rounded-full bg-[#34C759]" />
-                              <span className="text-[11px] text-[#34C759] font-medium">No issues</span>
+                              <span className="text-[11px] text-[#34C759] font-medium">{t("compare_no_personal", language)}</span>
                             </div>
                           ) : ws.slice(0, 3).map((w, wi) => (
                             <div key={wi} className="flex items-start gap-1.5">
@@ -449,13 +449,13 @@ export default function ComparePage() {
 
             {/* ── Nutrition ── */}
             {fullProducts.some(p => p?.nutritional_info && Object.keys(p.nutritional_info).length > 0) && (
-              <Section title="Nutrition (per 100g)" icon={<Info size={14} />}>
+              <Section title={t("compare_section_nutrition", language)} icon={<Info size={14} />}>
                 {[
-                  { label: "Calories", key: "energy_kcal", unit: " kcal" },
-                  { label: "Sugar", key: "total_sugars_g", unit: "g" },
-                  { label: "Sodium", key: "sodium_mg", unit: "mg" },
-                  { label: "Fat", key: "total_fat_g", unit: "g" },
-                  { label: "Protein", key: "protein_g", unit: "g" },
+                  { label: t("nutrition_calories", language), key: "energy_kcal", unit: " kcal" },
+                  { label: t("nutrition_sugar", language), key: "total_sugars_g", unit: "g" },
+                  { label: t("nutrition_sodium", language), key: "sodium_mg", unit: "mg" },
+                  { label: t("nutrition_fat", language), key: "total_fat_g", unit: "g" },
+                  { label: t("nutrition_protein", language), key: "protein_g", unit: "g" },
                 ].map(({ label, key, unit }) => {
                   const values = fullProducts.map(p => p?.nutritional_info?.[key] as number | null | undefined);
                   if (values.every(v => v == null)) return null;
@@ -475,7 +475,7 @@ export default function ComparePage() {
                                 <span className={`text-[13px] font-bold tabular-nums ${isBest ? "text-[#34C759]" : "text-black"}`}>
                                   {formatNutrient(val ?? null, unit)}
                                 </span>
-                                {isBest && <div className="text-[9px] font-medium text-[#34C759]">best</div>}
+                                {isBest && <div className="text-[9px] font-medium text-[#34C759]">{t("compare_best_nutrient", language)}</div>}
                               </div>
                             );
                           })}
@@ -489,20 +489,20 @@ export default function ComparePage() {
 
             {/* ── Summary ── */}
             {items.some(i => i.summary) && (
-              <Section title="AI Summary" icon={<Info size={14} />}>
+              <Section title={t("compare_section_summary", language)} icon={<Info size={14} />}>
                 <ColGrid n={n}>
                   {items.map((item, i) => (
                     <div key={item.id} className="px-3 py-3">
                       {item.summary ? (
                         <p className="text-[10px] text-oasis-text leading-relaxed line-clamp-4">{item.summary}</p>
                       ) : (
-                        <p className="text-[10px] text-oasis-muted italic">Not yet analyzed</p>
+                        <p className="text-[10px] text-oasis-muted italic">{t("compare_not_analyzed", language)}</p>
                       )}
                       <Link
                         href={`/product/${item.id}`}
                         className="inline-block mt-2 text-[10px] font-semibold text-[#007AFF]"
                       >
-                        View full →
+                        {t("compare_view_full", language)} →
                       </Link>
                     </div>
                   ))}
@@ -515,7 +515,17 @@ export default function ComparePage() {
               <Link href="/profile" className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-[#FFF9EC] border border-[#FF9F0A]/20">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[#FF9F0A]" />
                 <p className="text-[11px] text-[#7A5700] leading-relaxed">
-                  Add your health conditions and allergies in <span className="font-semibold">Profile</span> to see personalised warnings for each product.
+                  {(() => {
+                    const tmpl = t("compare_personalise_hint", language);
+                    const [before, after] = tmpl.split("{profile}");
+                    return (
+                      <>
+                        {before}
+                        <span className="font-semibold">{t("profile", language)}</span>
+                        {after}
+                      </>
+                    );
+                  })()}
                 </p>
               </Link>
             )}
