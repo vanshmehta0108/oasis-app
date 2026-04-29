@@ -366,6 +366,24 @@ export default function HomeClient() {
           </motion.div>
         )}
 
+        {/* ── Footer — Sift Index discovery ── */}
+        <motion.div variants={fadeUp} className="px-4 mt-2 mb-2">
+          <Link href="/the-index">
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center justify-between p-4 rounded-2xl bg-white border border-black/[0.06]"
+              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-1" style={{ color: "#007AFF" }}>The Sift Index</p>
+                <p className="text-[14px] font-semibold text-black leading-tight">What India is actually scanning</p>
+                <p className="text-[12px] text-black/55 mt-0.5">Honest stats, updated weekly.</p>
+              </div>
+              <ChevronRight size={18} style={{ color: "#8E8E93" }} />
+            </motion.div>
+          </Link>
+        </motion.div>
+
         {/* ── Empty state ── */}
         {productCount === 0 && !trending.length && (
           <motion.div variants={fadeUp} className="text-center py-16 px-4">

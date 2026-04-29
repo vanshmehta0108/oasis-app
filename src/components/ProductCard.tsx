@@ -4,6 +4,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ScoreRing } from "./ScoreRing";
 import type { Product } from "@/lib/mockData";
+import { useLanguage } from "./LanguageProvider";
+import { t } from "@/lib/i18n";
 import {
   UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby,
   Home as HomeIcon, Package
@@ -27,6 +29,7 @@ const categoryConfig: Record<string, { bg: string; color: string; Icon: React.El
 export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
   const isOFF = product.id.startsWith("off-");
   const cfg = categoryConfig[product.category];
+  const { language } = useLanguage();
 
   const handleClick = () => {
     if (isOFF) {
@@ -77,8 +80,8 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
               className="w-12 h-12 rounded-full flex items-center justify-center"
               style={{ background: "#F2F2F7" }}
             >
-              <span className="text-[9px] font-medium text-center leading-tight" style={{ color: "#8E8E93" }}>
-                {isOFF ? "Tap to\nanalyze" : "Not\nscored"}
+              <span className="text-[9px] font-medium text-center leading-tight whitespace-pre-line" style={{ color: "#8E8E93" }}>
+                {isOFF ? t('tap_to_analyze', language) : t('not_scored', language)}
               </span>
             </div>
           )}
@@ -90,6 +93,7 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
 
 export function ProductCardHorizontal({ product }: { product: Product }) {
   const cfg = categoryConfig[product.category];
+  const { language } = useLanguage();
 
   return (
     <Link href={`/product/${product.id}`}>
@@ -112,7 +116,7 @@ export function ProductCardHorizontal({ product }: { product: Product }) {
               <ScoreRing score={product.safety_score} grade={product.grade ?? "?"} size="sm" animate={false} />
             ) : (
               <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#F2F2F7" }}>
-                <span className="text-[8px] font-medium text-center leading-tight" style={{ color: "#8E8E93" }}>Not{"\n"}scored</span>
+                <span className="text-[8px] font-medium text-center leading-tight whitespace-pre-line" style={{ color: "#8E8E93" }}>{t('not_scored', language)}</span>
               </div>
             )}
           </div>
