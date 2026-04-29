@@ -235,7 +235,26 @@ async function run() {
   while (true) {
     let q = sb.from("products").select("id, barcode, name, brand, category, ingredients").range(offset, offset + BATCH_SIZE - 1);
     if (CATEGORY) q = q.eq("category", CATEGORY);
-    const { data, error } = await q;
+    let { data, error } = await q;
+    // Supabase Pro hits a statement-timeout on large filtered ranges past
+    // ~250 rows. Retry with a smaller window once before giving up — keeps
+    // the sweep going without manual intervention.
+    if (error && /(statement timeout|canceling)/i.test(error.message)) {
+      console.error(`Fetch timeout at offset=${offset}; retrying with window/4...`);
+      const small = Math.max(10, Math.floor(BATCH_SIZE / 4));
+      let retried = [];
+      let ok = true;
+      for (let s = 0; s < BATCH_SIZE; s += small) {
+        let rq = sb.from("products").select("id, barcode, name, brand, category, ingredients").range(offset + s, offset + s + small - 1);
+        if (CATEGORY) rq = rq.eq("category", CATEGORY);
+        const { data: d, error: e } = await rq;
+        if (e) { console.error(`  retry sub-window ${offset+s} failed: ${e.message}`); ok = false; break; }
+        if (!d || d.length === 0) break;
+        retried = retried.concat(d);
+        if (d.length < small) break;
+      }
+      if (ok && retried.length > 0) { data = retried; error = null; }
+    }
     if (error) { console.error("Fetch failed:", error.message); break; }
     if (!data || data.length === 0) break;
 
