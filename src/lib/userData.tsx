@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { supabase } from "./supabase";
 import { useUser } from "./useUser";
 import type { IngredientAnalysis } from "./mockData";
+import { dedupeProfile } from "./allergens";
 
 // ── Data shapes ───────────────────────────────────────────────────────────
 
@@ -388,8 +389,14 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   // ── Mutations ──────────────────────────────────────────────────────────
 
   const setProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    // Sanitize before persisting: trim, drop blanks, lowercase-key dedupe,
+    // cap length-per-entry and entry count. Same util the server uses, so
+    // local and DB representations are guaranteed identical.
+    const cleaned: Partial<UserProfile> = { ...updates };
+    if (Array.isArray(updates.conditions)) cleaned.conditions = dedupeProfile(updates.conditions);
+    if (Array.isArray(updates.allergies))  cleaned.allergies  = dedupeProfile(updates.allergies);
     await mutate((prev) => {
-      const profile: UserProfile = { ...prev.profile, ...updates };
+      const profile: UserProfile = { ...prev.profile, ...cleaned };
       return {
         next: { ...prev, profile },
         dbPatch: {

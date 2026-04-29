@@ -16,6 +16,7 @@ const HEALTH_CONDITIONS = [
   { id: "bp",        label: "High BP",              key: "condition_bp"       as const, emoji: "🩺" },
   { id: "thyroid",   label: "Thyroid",              key: "condition_thyroid"  as const, emoji: "🦋" },
   { id: "pcod",      label: "PCOD / PCOS",          key: "condition_pcod"     as const, emoji: "🩷" },
+  { id: "kidney",    label: "Kidney Disease",       key: "condition_kidney"   as const, emoji: "🫘" },
 ] as const;
 
 const COMMON_ALLERGIES = ["Peanuts", "Milk", "Gluten", "Soy", "Eggs", "Tree Nuts", "Shellfish", "Sulfites"] as const;

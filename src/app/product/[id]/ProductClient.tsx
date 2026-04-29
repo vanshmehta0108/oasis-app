@@ -19,7 +19,7 @@ import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
-import { buildVerdict } from "@/lib/verdict";
+import { buildVerdict, personalizedScore } from "@/lib/verdict";
 import { buildSwapCTA } from "@/lib/swap";
 import { track } from "@vercel/analytics";
 import { BuyOnline } from "@/components/BuyOnline";
@@ -150,6 +150,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
   const [notFoundState, setNotFoundState] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
   const [personalLoading, setPersonalLoading] = useState(false);
+  const [personalPenalty, setPersonalPenalty] = useState(0);
+  // null = no error; "rate_limit" | "ai_unavailable" | "personalize_failed"
+  const [personalError, setPersonalError] = useState<string | null>(null);
   const [showNutrition, setShowNutrition] = useState(false);
   const [showOtherInfo, setShowOtherInfo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -171,9 +174,16 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
   const [analysisLang, setAnalysisLang] = useState<"en" | "hi">("en");
   const [topRated, setTopRated] = useState<Product[]>([]);
 
-  const score = product?.safety_score ?? 0;
+  const baseScore = product?.safety_score ?? 0;
   const grade = product?.grade ?? "?";
   const hasScore = product?.safety_score != null && product?.grade != null;
+  // Personalized score is what the *user* sees in the ring. It is derived
+  // from the base score minus penalty for ingredients that intersect with
+  // their profile. Never raises the score — only lowers it.
+  const score = hasScore && personalPenalty > 0
+    ? (personalizedScore(product?.safety_score ?? null, personalPenalty) ?? baseScore)
+    : baseScore;
+  const isPersonalized = hasScore && score !== baseScore;
   const level = getSummaryLevel(score);
   const scoreColor = hasScore ? getScoreColor(score) : "#6b7c72";
 
@@ -596,6 +606,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
     const controller = new AbortController();
     const gen = loaderGen.current;
     setPersonalLoading(true);
+    setPersonalError(null);
     fetch("/api/personalize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -606,15 +617,29 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       }),
       signal: controller.signal,
     })
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          const code = data?.error || (res.status === 429 ? "rate_limit" : "personalize_failed");
+          throw new Error(code);
+        }
+        return data;
+      })
       .then((data) => {
         if (gen !== loaderGen.current) return;
         setPersonalWarnings(Array.isArray(data?.warnings) ? data.warnings : []);
+        setPersonalPenalty(typeof data?.penalty === "number" ? data.penalty : 0);
+        setPersonalError(null);
       })
       .catch((err) => {
         if (err?.name === "AbortError") return;
-        // Silent fail — personalized warnings are additive, not required.
-        if (gen === loaderGen.current) setPersonalWarnings([]);
+        if (gen !== loaderGen.current) return;
+        // Surface a visible failure so the user knows personalization didn't
+        // run. We keep the deterministic-only path safe by clearing the
+        // penalty so the displayed score reverts to the base score.
+        setPersonalWarnings([]);
+        setPersonalPenalty(0);
+        setPersonalError(err instanceof Error ? err.message : "personalize_failed");
       })
       .finally(() => {
         if (gen === loaderGen.current) setPersonalLoading(false);
@@ -1175,16 +1200,35 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
         </motion.div>
 
         {/* Warnings for You — personalized, only when profile has conditions/allergies */}
-        {product.analysis && (personalLoading || (personalWarnings && personalWarnings.length > 0)) && (
+        {product.analysis && hasPersonalization(userData.profile) && (personalLoading || personalError || (personalWarnings && personalWarnings.length > 0)) && (
           <motion.div variants={fadeUp} className="px-5 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <UserCircle size={16} className="text-[#007AFF]" />
               <h2 className="font-semibold text-[17px] text-oasis-text">{t('warnings_for_you', language)}</h2>
+              {isPersonalized && (
+                <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[#007AFF]/10 text-[#007AFF]">
+                  −{personalPenalty}
+                </span>
+              )}
             </div>
             {personalLoading ? (
               <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-oasis-card border border-oasis-border">
                 <Loader2 size={14} className="text-[#007AFF] animate-spin" />
                 <span className="text-xs text-oasis-muted">{t('checking_profile', language)}</span>
+              </div>
+            ) : personalError ? (
+              <div className="flex items-start gap-2 p-3.5 rounded-2xl bg-[#FFF8E6] border border-[#B87800]/20">
+                <AlertTriangle size={14} className="text-[#B87800] shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-[#B87800] leading-relaxed font-medium">
+                    {personalError === "rate_limit" || personalError === "ai_unavailable"
+                      ? t('personalize_rate_limit', language)
+                      : t('personalize_failed', language)}
+                  </p>
+                  <p className="text-[10px] text-oasis-muted mt-1">
+                    {t('personalize_fallback_note', language)}
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">

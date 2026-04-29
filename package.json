@@ -10,7 +10,9 @@
     "analyze-all": "node scripts/analyze-all.mjs",
     "import-products": "node -e \"fetch('http://localhost:3000/api/admin/import',{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':process.env.ADMIN_SECRET},body:JSON.stringify({page_size:50,max_pages:2})}).then(r=>r.json()).then(console.log)\"",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "qc": "npx -y tsx scripts/qc-personalization.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

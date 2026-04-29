@@ -1,6 +1,12 @@
 import { SchemaType, type Schema } from "@google/generative-ai";
 import { getGenAI, MODEL } from "./ai";
 import type { ScoreGrade } from "./database.types";
+import {
+  matchUserProfile,
+  matchesToWarnings,
+  personalizationPenalty,
+  type PersonalizedWarningOut,
+} from "./allergens";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -419,6 +425,90 @@ export async function translateAnalysis(
         ? { ...orig, name: t.name || orig.name, explanation: t.explanation || orig.explanation }
         : orig;
     }),
+  };
+}
+
+export interface PersonalizationResult {
+  warnings: PersonalizedWarningOut[];
+  penalty: number;                 // score reduction in points (0..60)
+  deterministicCount: number;      // how many of the warnings were deterministic
+  llmCount: number;                // how many came from the LLM augmenter
+  llmCalled: boolean;              // whether the LLM was actually called
+  llmError?: string;               // populated when the LLM call failed but deterministic results are still returned
+}
+
+// Deterministic-first personalization. Always runs the synonym matcher; the
+// LLM is only used to fill gaps when deterministic matches don't cover an
+// ingredient that the user's profile is at risk for. The LLM is best-effort:
+// failures don't fail the call as a whole — deterministic results still ship.
+export async function getPersonalizedAnalysis(
+  ingredients: string[],
+  healthConditions: string[],
+  allergies: string[],
+  options: { useLLM?: boolean } = {},
+): Promise<PersonalizationResult> {
+  const useLLM = options.useLLM ?? true;
+  if (healthConditions.length === 0 && allergies.length === 0) {
+    return { warnings: [], penalty: 0, deterministicCount: 0, llmCount: 0, llmCalled: false };
+  }
+
+  // ── Step 1: deterministic matcher ───────────────────────────────────────
+  const detMatches = matchUserProfile({
+    ingredients,
+    conditions: healthConditions,
+    allergies,
+  });
+  const detWarnings: PersonalizedWarningOut[] = matchesToWarnings(detMatches);
+  const detKeys = new Set(detWarnings.map((w) => `${w.related_condition}::${w.triggering_ingredient.toLowerCase()}`));
+
+  // Skip the LLM when deterministic already covered every ingredient that
+  // could plausibly trigger any of the user's conditions/allergies. This
+  // is the common path for high-coverage cases (e.g. peanut allergy on a
+  // peanut-product) and saves a 3–5s round-trip.
+  if (!useLLM) {
+    return {
+      warnings: detWarnings,
+      penalty: personalizationPenalty(detMatches),
+      deterministicCount: detWarnings.length,
+      llmCount: 0,
+      llmCalled: false,
+    };
+  }
+
+  // ── Step 2: LLM augmenter ───────────────────────────────────────────────
+  let llmWarnings: PersonalizedWarningOut[] = [];
+  let llmError: string | undefined;
+  let llmCalled = false;
+  try {
+    llmCalled = true;
+    const raw = await getPersonalizedWarnings(ingredients, healthConditions, allergies);
+    // Drop LLM warnings that duplicate deterministic ones.
+    llmWarnings = raw
+      .filter((w) => !detKeys.has(`${w.related_condition}::${w.triggering_ingredient.toLowerCase()}`))
+      .map((w) => ({
+        warning: w.warning,
+        severity: w.severity,
+        related_condition: w.related_condition,
+        triggering_ingredient: w.triggering_ingredient,
+        rule_id: "llm.augment",
+        source: "llm" as const,
+      }));
+  } catch (err) {
+    llmError = err instanceof Error ? err.message : String(err);
+  }
+
+  // Penalty is computed ONLY from deterministic matches — LLM output is
+  // surfaced as warnings but does not move the score (we don't trust the
+  // LLM enough to penalize on its judgement alone).
+  const penalty = personalizationPenalty(detMatches);
+
+  return {
+    warnings: [...detWarnings, ...llmWarnings],
+    penalty,
+    deterministicCount: detWarnings.length,
+    llmCount: llmWarnings.length,
+    llmCalled,
+    ...(llmError ? { llmError } : {}),
   };
 }
 

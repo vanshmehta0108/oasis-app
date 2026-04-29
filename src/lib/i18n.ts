@@ -115,6 +115,9 @@ export const EN = {
   point_camera: "Point your camera at the ingredient list on the back of the pack.",
   warnings_for_you: "For you, specifically",
   checking_profile: "Checking against your profile…",
+  personalize_failed: "Personalized check unavailable",
+  personalize_rate_limit: "Personalization is busy — try again in a moment",
+  personalize_fallback_note: "Showing the general verdict for now.",
   view_comparison: "See comparison",
   remove_from_compare: "In compare — tap to remove",
   removed_from_compare: "Removed from compare",
@@ -271,6 +274,7 @@ export const EN = {
   condition_bp: "High BP",
   condition_thyroid: "Thyroid",
   condition_pcod: "PCOD / PCOS",
+  condition_kidney: "Kidney disease",
 
   // Allergens
   allergen_nuts: "Nuts",
@@ -401,6 +405,9 @@ export const HI = {
   point_camera: "कैमरा पैकेट के पीछे की सामग्री लिस्ट पर लगाएं।",
   warnings_for_you: "आपके लिए ख़ास",
   checking_profile: "आपकी प्रोफ़ाइल से जाँच रहे हैं…",
+  personalize_failed: "व्यक्तिगत जाँच उपलब्ध नहीं है",
+  personalize_rate_limit: "व्यक्तिगतकरण व्यस्त है — थोड़ी देर बाद देखें",
+  personalize_fallback_note: "अभी सामान्य निर्णय दिखा रहे हैं।",
   view_comparison: "तुलना देखें",
   remove_from_compare: "तुलना में है — हटाएं",
   removed_from_compare: "तुलना से हटाया",
@@ -556,6 +563,7 @@ export const HI = {
   condition_bp: "उच्च रक्तचाप",
   condition_thyroid: "थायरॉइड",
   condition_pcod: "PCOD / PCOS",
+  condition_kidney: "किडनी रोग",
 
   // Allergens
   allergen_nuts: "नट्स",

@@ -163,6 +163,18 @@ function pickSubhead(tone: VerdictTone, input: VerdictInput, lang: Language): st
   }
 }
 
+// Compute a personalized score for the *displayed* score. Never raises the
+// score, only lowers it. When the user has no personalization or when the
+// penalty is 0, returns the original score unchanged.
+//
+// Kept here (not in allergens.ts) because it's the UI-facing piece — the
+// matcher decides the penalty; this function decides what the user sees.
+export function personalizedScore(baseScore: number | null, penalty: number): number | null {
+  if (baseScore == null) return null;
+  if (!Number.isFinite(penalty) || penalty <= 0) return baseScore;
+  return Math.max(0, Math.min(100, Math.round(baseScore - penalty)));
+}
+
 // Convenience: tone label suitable for a small badge.
 export function toneBadge(tone: VerdictTone, lang: Language = "en"): string {
   switch (tone) {

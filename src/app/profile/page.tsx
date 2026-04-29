@@ -21,6 +21,9 @@ const healthConditions = [
   { name: "Gluten Sensitive",  key: "condition_gluten"   as const, icon: "🌾" },
   { name: "Heart Condition",   key: "condition_heart"    as const, icon: "❤️" },
   { name: "High BP",           key: "condition_bp"       as const, icon: "🩺" },
+  { name: "Thyroid",           key: "condition_thyroid"  as const, icon: "🦋" },
+  { name: "PCOD / PCOS",       key: "condition_pcod"     as const, icon: "🩷" },
+  { name: "Kidney Disease",    key: "condition_kidney"   as const, icon: "🫘" },
 ];
 
 function GoogleSVG() {
