@@ -19,6 +19,7 @@ import { useUserData, hasPersonalization, LIMITS } from "@/lib/userData";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
+import { buildVerdict } from "@/lib/verdict";
 import { BuyOnline } from "@/components/BuyOnline";
 
 interface PersonalWarning {
@@ -142,7 +143,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
     initialProduct ? mapRawToProduct(initialProduct) : null
   );
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzingMessage, setAnalyzingMessage] = useState("AI is analysing ingredients…");
+  const [analyzingMessage, setAnalyzingMessage] = useState("Reading the ingredients…");
   const [labelScanning, setLabelScanning] = useState(false);
   const [notFoundState, setNotFoundState] = useState(false);
   const [personalWarnings, setPersonalWarnings] = useState<PersonalWarning[] | null>(null);
@@ -247,7 +248,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
   // Trigger AI analysis for unscored products
   function runAnalysis(ingredients: string[], category: string, barcode?: string) {
     setAnalyzing(true);
-    setAnalyzingMessage("Checking database…");
+    setAnalyzingMessage("Checking the database…");
     const gen = loaderGen.current;
     fetch("/api/analyze", {
       method: "POST",
@@ -255,7 +256,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       body: JSON.stringify({ ingredients, category: category || "food", lang, ...(barcode ? { barcode } : {}) }),
     })
       .then(async (res) => {
-        if (!res.ok) { showToast("Analysis failed — please try again", "error"); return; }
+        if (!res.ok) { showToast("We couldn't score it just now. One more try?", "error"); return; }
         await readSSE(res, gen, (data) => {
           if (data.type === "progress" && typeof data.message === "string") {
             setAnalyzingMessage(data.message);
@@ -274,7 +275,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
         });
       })
       .catch(() => {
-        if (gen === loaderGen.current) showToast("Analysis failed — please try again", "error");
+        if (gen === loaderGen.current) showToast("We couldn't score it just now. One more try?", "error");
       })
       .finally(() => {
         if (gen === loaderGen.current) setAnalyzing(false);
@@ -291,13 +292,13 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
     };
     reader.onerror = () => {
       finish();
-      showToast("Couldn't read the image file — please try again", "error");
+      showToast("We couldn't open that image. Try another shot?", "error");
     };
     reader.onload = () => {
       const result = reader.result;
       if (typeof result !== "string" || !result.includes(",")) {
         finish();
-        showToast("Image couldn't be processed — try a different photo", "error");
+        showToast("That photo didn't come through. Try another?", "error");
         return;
       }
       const base64 = result.split(",")[1];
@@ -315,7 +316,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
         }),
       })
         .then(async (res) => {
-          if (!res.ok) { showToast("Label scan failed — please try again", "error"); return; }
+          if (!res.ok) { showToast("Couldn't read the label. Try a brighter, closer shot?", "error"); return; }
           let gotResult = false;
           await readSSE(res, gen, (data) => {
             if (data.type === "progress" && typeof data.message === "string") {
@@ -324,7 +325,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               if (gen !== loaderGen.current) return;
               const payload = data as Record<string, unknown>;
               if (!payload.analysis) {
-                showToast("Couldn't read the label — try better lighting or a closer shot", "error");
+                showToast("Couldn't read the label. Try a brighter, closer shot?", "error");
                 return;
               }
               gotResult = true;
@@ -356,16 +357,16 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 analysis: mapAnalysisJson(analysis),
               }));
             } else if (data.type === "error") {
-              showToast("Couldn't read the label — try better lighting or a closer shot", "error");
+              showToast("Couldn't read the label. Try a brighter, closer shot?", "error");
             }
           });
           if (!gotResult && gen === loaderGen.current) {
-            showToast("Couldn't read the label — try better lighting or a closer shot", "error");
+            showToast("Couldn't read the label. Try a brighter, closer shot?", "error");
           }
         })
         .catch(() => {
           if (gen !== loaderGen.current) return;
-          showToast("Label scan failed — please try again", "error");
+          showToast("Couldn't read the label. One more try?", "error");
         })
         .finally(finish);
     };
@@ -562,7 +563,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
     if (!product) return;
     if (inCompare) {
       await removeFromCompare(product.id);
-      showToast("Removed from compare", "info");
+      showToast(t("removed_from_compare", language), "info");
       return;
     }
     const result = await addToCompare({
@@ -575,9 +576,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       summary: product.analysis?.summary,
     });
     if (result === "added") {
-      showToast("Added to compare", "success");
+      showToast(t("added_to_compare", language), "success");
     } else if (result === "full") {
-      showToast(`Compare holds up to ${LIMITS.COMPARE_MAX} products — remove one first`, "error");
+      showToast(`Compare holds up to ${LIMITS.COMPARE_MAX} — remove one first.`, "error");
     }
   }
 
@@ -713,14 +714,14 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
         >
           <Camera size={36} color="#007AFF" />
         </div>
-        <h1 className="text-[20px] font-bold text-black mb-2">Not in our database</h1>
-        <p className="text-sm mb-6 max-w-xs" style={{ color: "#8E8E93" }}>
-          Scan the ingredient label on the back of the packaging and we&apos;ll analyse it in real time.
+        <h1 className="text-[22px] font-bold text-black mb-2 tracking-[-0.01em]">{t('not_in_db', language)}</h1>
+        <p className="text-[15px] leading-relaxed mb-6 max-w-xs" style={{ color: "#6D6D72" }}>
+          {t('scan_label_prompt', language)}
         </p>
         {labelScanning ? (
           <div className="flex items-center gap-2 px-6 py-3 rounded-full" style={{ background: "#007AFF" }}>
             <Loader2 size={16} color="#fff" className="animate-spin" />
-            <span className="text-sm font-semibold text-white">Analysing label…</span>
+            <span className="text-sm font-semibold text-white">{t('analysing_label', language)}</span>
           </div>
         ) : (
           <motion.button
@@ -730,11 +731,11 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             style={{ background: "#007AFF", boxShadow: "0 4px 16px rgba(0,122,255,0.36)" }}
           >
             <Camera size={16} color="#fff" />
-            Scan Ingredient Label
+            {t('scan_ingredient_label', language)}
           </motion.button>
         )}
         <Link href="/scan" className="mt-4 text-sm font-medium" style={{ color: "#8E8E93" }}>
-          Scan a different product
+          {t('scan_different', language)}
         </Link>
       </div>
     );
@@ -796,7 +797,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               safety_score: product.safety_score,
               grade: product.grade,
             });
-            showToast(result === "added" ? "Saved" : "Removed from saved", "info");
+            showToast(result === "added" ? t("saved", language) : t("removed_from_saved", language), "info");
           }}
           aria-label={isBookmarked ? "Remove from saved" : "Save product"}
           aria-pressed={isBookmarked}
@@ -829,7 +830,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
           >
             <Loader2 size={16} className={`${labelScanning ? "text-[#007AFF]" : "text-oasis-green"} animate-spin shrink-0`} />
             <p className={`text-xs font-medium ${labelScanning ? "text-[#007AFF]" : "text-oasis-green"}`}>
-              {labelScanning ? "Reading label and scoring ingredients…" : analyzingMessage}
+              {labelScanning ? "Reading the label, scoring ingredients…" : analyzingMessage}
             </p>
           </motion.div>
         )}
@@ -891,10 +892,10 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             {id.startsWith("manual-") && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-[#FF9F0A]/10 text-[#B87800] font-semibold"
-                title="User-submitted — not yet reviewed by our team"
+                title="Submitted by a user — not yet reviewed."
               >
                 <AlertTriangle size={10} />
-                Community submitted
+                Community submission
               </span>
             )}
           </motion.div>
@@ -936,8 +937,8 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               whileTap={{ scale: 0.96 }}
               onClick={() => {
                 const text = hasScore
-                  ? `I scanned ${product.name} on Sift — it scored ${score}/100 (Grade ${grade}). ${level.label}! 🌿\n\nScan yours: ${window.location.origin}`
-                  : `I checked ${product.name} on Sift 🌿\n\nScan yours: ${window.location.origin}`;
+                  ? `Sift's verdict on ${product.name}: ${score}/100 (${grade}).\n\nScan anything yourself: ${window.location.origin}`
+                  : `I checked ${product.name} on Sift.\n\nScan anything yourself: ${window.location.origin}`;
                 window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
               }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/10 border border-[#25D366]/20 hover:bg-[#25D366]/20 transition-colors"
@@ -989,7 +990,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               <Scale size={15} className="text-oasis-text" />
             )}
             <span className={`text-sm font-medium ${inCompare ? "text-[#007AFF]" : "text-oasis-text"}`}>
-              {inCompare ? "In compare — tap to remove" : t('add_to_compare', language)}
+              {inCompare ? t('remove_from_compare', language) : t('add_to_compare', language)}
             </span>
           </motion.button>
           {inCompare && (
@@ -998,28 +999,57 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               className="flex items-center justify-center gap-1 mt-2 text-xs font-semibold"
               style={{ color: "#007AFF" }}
             >
-              View comparison ({userData.compareList.length}/{3})
+              {t('view_comparison', language)} ({userData.compareList.length}/{3})
               <ChevronRight size={12} />
             </Link>
           )}
         </motion.div>
 
-        {/* Summary card */}
-        {hasScore && product.analysis?.summary && (
-          <motion.div variants={fadeUp} className="px-5 mb-4">
-            <div className={`flex items-start gap-3 p-4 rounded-2xl ${level.bg} border border-black/[0.06] border-l-[3px] ${level.border}`}>
-              <ShieldAlert size={20} className={`${level.color} shrink-0 mt-0.5`} />
-              <div>
-                <span className={`text-sm font-bold ${level.color}`}>
-                  {t('overall', language)}: {level.label === "Safe" ? t('safe', language) : level.label === "Moderate" ? t('caution', language) : level.label === "Concerning" ? t('warning', language) : t('danger', language)}
-                </span>
-                <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
-                  {product.analysis.summary}
-                </p>
+        {/* Verdict card — the "what would a friend say" moment */}
+        {hasScore && (() => {
+          const verdict = buildVerdict({
+            score,
+            harmfulCount: ingredientCounts.harmful,
+            beneficialCount: ingredientCounts.beneficial,
+            warningsCount: product.analysis?.warnings.length ?? 0,
+            summary: product.analysis?.summary,
+            language,
+          });
+          return (
+            <motion.div variants={fadeUp} className="px-5 mb-4">
+              <div
+                className="relative rounded-3xl overflow-hidden"
+                style={{
+                  background: verdict.bg,
+                  boxShadow: `0 1px 2px rgba(0,0,0,0.04), 0 12px 32px -16px ${verdict.accent}40`,
+                }}
+              >
+                <div
+                  className="absolute left-0 top-0 bottom-0 w-1"
+                  style={{ background: verdict.accent }}
+                />
+                <div className="px-5 py-4">
+                  <div className="flex items-baseline justify-between gap-3 mb-1">
+                    <h2
+                      className="text-[22px] font-bold leading-tight tracking-[-0.01em]"
+                      style={{ color: verdict.accent }}
+                    >
+                      {verdict.headline}
+                    </h2>
+                  </div>
+                  <p className="text-[14px] leading-relaxed text-black/75">
+                    {verdict.subhead}
+                  </p>
+                  {product.analysis?.summary && (
+                    <p className="text-[12px] leading-relaxed text-black/55 mt-2 pt-2 border-t border-black/[0.06]">
+                      {product.analysis.summary}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          );
+        })()}
 
 
         {/* Hidden file input for label scanning */}
@@ -1055,7 +1085,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-", "") : id)}
                 className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
               >
-                Retry Analysis →
+                {t('retry_analysis', language)} →
               </button>
             </div>
           )}
@@ -1073,14 +1103,14 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               {analyzing || labelScanning ? (
                 <div className="flex items-center gap-2 mt-1">
                   <Loader2 size={12} className="text-oasis-green animate-spin" />
-                  <span className="text-[11px] text-oasis-green font-medium">Scoring each ingredient…</span>
+                  <span className="text-[11px] text-oasis-green font-medium">{t('scoring_ingredients', language)}</span>
                 </div>
               ) : (
                 <button
                   onClick={() => runAnalysis(product.ingredients, product.category, id.startsWith("off-") ? id.replace("off-", "") : id)}
                   className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-oasis-green/10 text-oasis-green border border-oasis-green/20"
                 >
-                  Analyse Ingredients →
+                  {t('analyse_ingredients', language)} →
                 </button>
               )}
             </div>
@@ -1093,9 +1123,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 <Camera size={22} color="#007AFF" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-black">Ingredient data unavailable</p>
+                <p className="text-sm font-semibold text-black">{t('ingredient_data_unavailable', language)}</p>
                 <p className="text-[12px] mt-1" style={{ color: "#8E8E93" }}>
-                  Point your camera at the ingredient list on the back of the pack for an instant safety score.
+                  {t('point_camera', language)}
                 </p>
               </div>
               <motion.button
@@ -1105,7 +1135,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 style={{ background: "#007AFF", boxShadow: "0 4px 14px rgba(0,122,255,0.30)" }}
               >
                 <Camera size={14} color="#fff" />
-                Scan Ingredient Label
+                {t('scan_ingredient_label', language)}
               </motion.button>
             </div>
           )}
@@ -1116,12 +1146,12 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
           <motion.div variants={fadeUp} className="px-5 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <UserCircle size={16} className="text-[#007AFF]" />
-              <h2 className="font-semibold text-[17px] text-oasis-text">Warnings for You</h2>
+              <h2 className="font-semibold text-[17px] text-oasis-text">{t('warnings_for_you', language)}</h2>
             </div>
             {personalLoading ? (
               <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-oasis-card border border-oasis-border">
                 <Loader2 size={14} className="text-[#007AFF] animate-spin" />
-                <span className="text-xs text-oasis-muted">Checking against your health profile…</span>
+                <span className="text-xs text-oasis-muted">{t('checking_profile', language)}</span>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1183,7 +1213,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#F0FBF4] border border-[#1E8040]/15 relative overflow-hidden">
               <Leaf size={20} className="text-[#1E8040] shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="text-sm font-bold text-[#1E8040]">Healthier Alternative</span>
+                <span className="text-sm font-bold text-[#1E8040]">{t('healthier_alt', language)}</span>
                 <p className="text-xs text-oasis-text-secondary leading-relaxed mt-1">
                   {product.analysis.healthier_alternative}
                 </p>
@@ -1206,7 +1236,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               onClick={() => setShowNutrition((v) => !v)}
               className="w-full flex items-center justify-between mb-3"
             >
-              <h2 className="font-semibold text-[17px] text-oasis-text">Nutrition Facts</h2>
+              <h2 className="font-semibold text-[17px] text-oasis-text">{t('nutrition_facts', language)}</h2>
               <motion.div animate={{ rotate: showNutrition ? 180 : 0 }} transition={{ duration: 0.2 }}>
                 <ChevronDown size={18} className="text-oasis-muted" />
               </motion.div>
@@ -1235,7 +1265,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             onClick={() => setShowOtherInfo((v) => !v)}
             className="w-full flex items-center justify-between mb-3"
           >
-            <h2 className="font-semibold text-[17px] text-oasis-text">More details</h2>
+            <h2 className="font-semibold text-[17px] text-oasis-text">{t('more_details', language)}</h2>
             <motion.div animate={{ rotate: showOtherInfo ? 180 : 0 }} transition={{ duration: 0.2 }}>
               <ChevronDown size={18} className="text-oasis-muted" />
             </motion.div>
@@ -1246,7 +1276,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                 <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-2.5">
                     <Package size={14} className="text-oasis-muted" />
-                    <span className="text-[13px] text-black">Barcode</span>
+                    <span className="text-[13px] text-black">{t('barcode', language)}</span>
                   </div>
                   <span className="text-[12px] font-mono text-oasis-muted">{product.barcode}</span>
                 </div>
@@ -1254,7 +1284,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
               <div className={`flex items-center justify-between px-4 py-3 ${product.barcode ? "border-t border-black/[0.04]" : ""}`}>
                 <div className="flex items-center gap-2.5">
                   <Info size={14} className="text-oasis-muted" />
-                  <span className="text-[13px] text-black">Category</span>
+                  <span className="text-[13px] text-black">{t('category', language)}</span>
                 </div>
                 <span className="text-[13px] font-semibold text-black capitalize">{product.category}</span>
               </div>
@@ -1267,7 +1297,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
           <motion.div variants={fadeUp} className="mb-4">
             <div className="flex items-center gap-2 px-5 mb-3">
               <Sparkles size={15} className="text-[#007AFF]" />
-              <h2 className="font-semibold text-[17px] text-oasis-text">Top-rated {product.category.toLowerCase()}</h2>
+              <h2 className="font-semibold text-[17px] text-oasis-text">{t('top_rated', language)} · {product.category.toLowerCase()}</h2>
             </div>
             <div className="flex gap-3 overflow-x-auto hide-scrollbar px-5 pb-1">
               {topRated.map((p) => (
@@ -1285,7 +1315,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}
           >
             <Info size={16} className="text-[#007AFF] shrink-0" />
-            <span className="text-sm font-semibold text-oasis-text flex-1">How scoring works</span>
+            <span className="text-sm font-semibold text-oasis-text flex-1">{t('how_scoring_works', language)}</span>
             <ExternalLink size={14} className="text-oasis-muted" />
           </Link>
 
@@ -1295,7 +1325,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}
           >
             <Flag size={16} className="text-oasis-muted shrink-0" />
-            <span className="text-sm font-semibold text-oasis-text flex-1">Report an issue</span>
+            <span className="text-sm font-semibold text-oasis-text flex-1">{t('report_issue', language)}</span>
             <ExternalLink size={14} className="text-oasis-muted" />
           </Link>
 
@@ -1306,9 +1336,9 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             >
               <Heart size={16} className="text-[#007AFF] shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-semibold text-oasis-text block">Personalise your warnings</span>
+                <span className="text-sm font-semibold text-oasis-text block">{t('personalise_warnings', language)}</span>
                 <p className="text-xs text-oasis-muted leading-relaxed mt-1">
-                  Add your conditions and allergies in Profile to see warnings tailored to you.
+                  Add your conditions or allergies in Profile and warnings get tailored to you.
                 </p>
               </div>
             </Link>

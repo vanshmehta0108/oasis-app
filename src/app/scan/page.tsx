@@ -77,11 +77,12 @@ export default function ScanPage() {
   const [loadingNote, setLoadingNote] = useState("");
 
   const handleScan = useCallback(async (barcode: string) => {
-    if (navigator.vibrate) navigator.vibrate(60);
+    // Crisp double-tap haptic — feels confident, not buzzy.
+    if (navigator.vibrate) navigator.vibrate([12, 40, 18]);
     setScannedBarcode(barcode);
     setState("looking-up");
     setLoadingLabel(t('looking_up', lang));
-    setLoadingNote(`Barcode: ${barcode}`);
+    setLoadingNote(`Barcode · ${barcode}`);
 
     try {
       const res = await fetch("/api/lookup", {
@@ -101,7 +102,7 @@ export default function ScanPage() {
       if (data.needs_analysis && product.ingredients?.length > 0) {
         setState("analyzing");
         setLoadingLabel(t('analysing', lang));
-        setLoadingNote("AI is scoring each ingredient for safety");
+        setLoadingNote("Scoring each ingredient.");
 
         try {
           const aRes = await fetch("/api/analyze", {
@@ -163,7 +164,7 @@ export default function ScanPage() {
   const handlePhoto = async (base64: string) => {
     setState("analyzing-photo");
     setLoadingLabel(t('analysing_label', lang));
-    setLoadingNote("AI is extracting and scoring ingredients");
+    setLoadingNote("Reading the label, scoring ingredients.");
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
@@ -271,7 +272,7 @@ export default function ScanPage() {
               />
             </div>
 
-            <p className="text-[11px] text-oasis-muted">Powered by AI</p>
+            <p className="text-[11px] text-oasis-muted tracking-wider uppercase">Sift</p>
           </motion.div>
         )}
 
@@ -294,7 +295,7 @@ export default function ScanPage() {
             <h2 className="font-semibold text-[18px] text-oasis-text">{t('product_not_found', lang)}</h2>
             <p className="text-sm text-oasis-muted text-center leading-relaxed max-w-xs">
               {scannedBarcode && (
-                <>Barcode <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> isn&apos;t in our database. </>
+                <>We haven&apos;t seen <span className="text-oasis-text font-mono text-xs bg-oasis-card px-2 py-0.5 rounded">{scannedBarcode}</span> yet. </>
               )}
               {t('photo_prompt', lang)}
             </p>

@@ -144,7 +144,13 @@ export default function HomeClient() {
         <motion.div variants={fadeUp} className="px-4 pt-14 pb-6">
           <div className="flex items-center justify-between mb-5">
             <p className="text-[11px] font-bold tracking-[0.15em] uppercase" style={{ color: "#8E8E93" }}>
-              Sift — AI Food Safety
+              {(() => {
+                const h = new Date().getHours();
+                if (h < 5) return t('greeting_night', language);
+                if (h < 12) return t('greeting_morning', language);
+                if (h < 17) return t('greeting_afternoon', language);
+                return t('greeting_evening', language);
+              })()}
             </p>
             {isAnonymous && (
               <Link

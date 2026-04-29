@@ -76,7 +76,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
             // Guard against late callbacks after unmount or after a prior scan in this session
             if (!mountedRef.current || hasScannedRef.current) return;
             hasScannedRef.current = true;
-            if (navigator.vibrate) navigator.vibrate(60);
+            // Confident double-tap on lock — feels like a confirmation, not noise.
+            if (navigator.vibrate) navigator.vibrate([10, 30, 14]);
             onScan(decodedText);
             setScanning(false);
           },
@@ -87,9 +88,9 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       } catch (err) {
         if (!mountedRef.current) return;
         if (err instanceof Error && err.message.toLowerCase().includes("permission")) {
-          setError("Camera access denied. Please allow camera permission in your browser settings.");
+          setError("We need camera access to scan. Allow it in your browser settings, then try again.");
         } else {
-          setError("Could not start camera. Make sure no other app is using it.");
+          setError("We couldn't start the camera. Close any other apps using it and try again.");
         }
       }
     };
@@ -124,16 +125,16 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
         <div className="w-16 h-16 rounded-full bg-red-400/10 flex items-center justify-center mb-4">
           <Camera size={28} className="text-red-400" />
         </div>
-        <h3 className="text-lg font-semibold text-oasis-text mb-2">Camera Unavailable</h3>
+        <h3 className="text-lg font-semibold text-oasis-text mb-2">Camera unavailable</h3>
         <p className="text-sm text-oasis-muted leading-relaxed max-w-xs mb-6">{error}</p>
         <div className="w-full max-w-xs">
-          <p className="text-xs text-oasis-muted mb-2">Enter barcode manually</p>
+          <p className="text-xs text-oasis-muted mb-2">Or type the barcode</p>
           <div className="flex gap-2">
             <input
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              placeholder="Barcode number..."
+              placeholder="Barcode number…"
               value={manualBarcode}
               onChange={(e) => setManualBarcode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && manualBarcode && onScan(manualBarcode)}
@@ -152,7 +153,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
           onClick={() => { setError(null); setScanning(true); }}
           className="mt-4 px-6 py-2.5 rounded-full bg-oasis-green text-oasis-black font-semibold text-sm"
         >
-          Try Again
+          Try again
         </button>
       </div>
     );
@@ -190,8 +191,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
             className="absolute left-0 right-0 text-center pointer-events-none"
             style={{ top: "calc(50% + 72px)" }}
           >
-            <p className="text-sm text-white/80 font-medium">Align barcode within the frame</p>
-            <p className="text-xs text-white/50 mt-1">Hold steady — it scans automatically</p>
+            <p className="text-sm text-white/85 font-medium">Line up the barcode</p>
+            <p className="text-xs text-white/55 mt-1">Hold steady — we&apos;ll do the rest.</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -215,7 +216,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  placeholder="Type barcode number..."
+                  placeholder="Type the barcode…"
                   value={manualBarcode}
                   onChange={(e) => setManualBarcode(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && manualBarcode && onScan(manualBarcode)}
@@ -249,7 +250,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
               }}
             >
               <ImagePlus size={16} />
-              Photo of Label
+              Snap the label
             </motion.button>
           )}
 
@@ -263,7 +264,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
               border: "1px solid rgba(255,255,255,0.15)",
             }}
           >
-            <span>Can&apos;t scan?</span>
+            <span>Type instead</span>
             <ChevronDown
               size={14}
               className={`transition-transform ${showManual ? "rotate-180" : ""}`}
