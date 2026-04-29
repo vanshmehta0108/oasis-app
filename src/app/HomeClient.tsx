@@ -200,27 +200,6 @@ export default function HomeClient() {
           )}
         </motion.div>
 
-        {/* ── Stats ── */}
-        <motion.div variants={fadeUp} className="px-4 mb-8">
-          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-            <div className="grid grid-cols-3">
-              {[
-                { label: t('products_analyzed', language), value: <AnimatedCounter target={productCount || 0} />, color: "#007AFF", border: true },
-                { label: t('flagged_unsafe', language),    value: <AnimatedCounter target={flaggedCount || 0} />,  color: "#FF3B30", border: true },
-                { label: t('total_scans', language),       value: <AnimatedCounter target={scanCount} suffix="+" />, color: "#1C1C1E", border: false },
-              ].map(({ label, value, color, border }) => (
-                <div
-                  key={label}
-                  className="flex flex-col items-center py-5 px-2"
-                  style={border ? { borderRight: "0.5px solid rgba(0,0,0,0.08)" } : {}}
-                >
-                  <span className="text-[22px] font-bold tabular-nums leading-none" style={{ color }}>{value}</span>
-                  <span className="text-[10px] font-medium mt-1.5 text-center leading-tight" style={{ color: "#8E8E93" }}>{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
 
         {/* ── Trending ── */}
         {trending.length > 0 && (
@@ -344,10 +323,7 @@ export default function HomeClient() {
                         <Package size={20} color="#8E8E93" />
                       </div>
                     )}
-                    <div className="text-center">
-                      <p className="text-[12px] font-semibold text-black">{cat.name}</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "#8E8E93" }}>{cat.count} {t('items', language)}</p>
-                    </div>
+                    <p className="text-[12px] font-semibold text-black">{cat.name}</p>
                   </motion.div>
                 </Link>
               );
