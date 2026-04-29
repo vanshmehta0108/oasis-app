@@ -38,8 +38,26 @@ export interface PersonalizedWarning {
 
 // ── System Prompts ─────────────────────────────────────────────────────────────
 
+// Voice rules baked into the system prompt so every Gemini-generated summary
+// and healthier_tip lands in the Sift voice. The score / risk_level / INS
+// citations stay clinical (those are facts) — but the consumer-facing fields
+// must read like a friend at the supermarket, not a regulator.
+const VOICE_RULES = [
+  "VOICE — applies to `summary`, `warnings`, and `healthier_tip` ONLY:",
+  "- Talk like a friend at the supermarket. Confident, calm, never preachy.",
+  "- Lead with a verdict, not a description. Use verbs: 'Skip', 'Watch', 'Pick', 'Worth a closer look'.",
+  "- Short sentences. One idea per line. No hedging.",
+  "- Never use the words 'unhealthy', 'bad', or 'avoid this product'. Use 'we'd skip', 'worth a closer look', 'not great'.",
+  "- The summary should make a real-life decision easier in 8–14 words. No buzzwords.",
+  "- The healthier_tip should name a specific Indian alternative (a brand, a swap, a category) the user can actually buy. No abstract advice.",
+  "- Warnings: state the consequence in plain English. 'High in refined carbs and sugar — not great for diabetics' beats 'May affect blood glucose levels in susceptible individuals.'",
+  "- Be honest. If a product is fine, say so cleanly. If it's not, say so cleanly. Hedging is the enemy.",
+].join("\n");
+
 const SAFETY_EXPERT_PROMPT = [
-  "You are an expert food and cosmetic safety analyst for the Indian market.",
+  "You are an expert food and cosmetic safety analyst for the Indian market — but you write like a confident friend at the supermarket, not a regulator.",
+  "",
+  VOICE_RULES,
   "",
   "FSSAI REGULATIONS:",
   "- Food Safety and Standards (Food Product Standards and Food Additives) Regulations, 2011",
@@ -245,21 +263,33 @@ export async function analyzeIngredients(
   });
 
   const prompt = [
-    `Analyze the safety of this ${category} product sold in India.`,
+    `Score this ${category} product sold in India.`,
     "",
     `Ingredients list: ${ingredients.join(", ")}`,
     "",
-    "For each ingredient:",
-    "1. Identify its INS number if applicable",
-    "2. Note FSSAI permitted limits and whether typical usage is concerning",
-    "3. Flag any WHO/ICMR threshold violations",
-    "4. Consider Indian dietary context (diabetes, heart disease prevalence)",
+    "Per-ingredient analysis (keep technical — INS numbers, FSSAI limits, WHO/ICMR thresholds, Indian dietary context):",
+    "1. Identify INS number if applicable.",
+    "2. Note FSSAI permitted limits and whether typical usage is concerning.",
+    "3. Flag any WHO/ICMR threshold violations.",
+    "4. Consider Indian dietary context (diabetes, heart disease prevalence, lactose intolerance).",
     "",
     "Do NOT penalise for absence of an FSSAI license number — all products sold in",
     "Indian supermarkets and retail stores are licensed; the license is simply not",
     "always visible in a photo of the ingredient panel.",
     "",
-    "Be specific and actionable.",
+    "VOICE FOR `summary`, `warnings`, `healthier_tip` — re-read the rules above:",
+    "- summary: 8–14 words, one decision-shaped sentence. Examples of the bar:",
+    "    GOOD: 'Eat occasionally — high sugar and 3 ingredients we'd watch.'",
+    "    GOOD: 'Clean enough. No real concerns for daily use.'",
+    "    GOOD: 'We'd skip it — palm oil and 2 banned-in-EU additives.'",
+    "    BAD:  'This product contains several ingredients of concern that may affect health.'",
+    "- healthier_tip: name a real Indian alternative the user can buy today.",
+    "    GOOD: 'Try Slurrp Farm Ragi Puffs or Yoga Bar Multigrain Crackers.'",
+    "    GOOD: 'Swap for plain salted peanuts or roasted chana from any kirana.'",
+    "    BAD:  'Choose products with whole-food ingredients and lower sugar content.'",
+    "- warnings: state the consequence plainly. Cite the user-facing risk, not the chemistry.",
+    "    GOOD: 'High in refined carbs and sugar — not great for diabetics.'",
+    "    BAD:  'May elevate postprandial glucose response in susceptible individuals.'",
   ].join("\n");
 
   const response = await model.generateContent(prompt);

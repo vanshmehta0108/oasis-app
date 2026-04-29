@@ -80,12 +80,17 @@ export async function getProductsByCategory(
     Skincare: "skincare", Baby: "baby_food", Household: "household",
   };
   const dbCat = categoryMap[category] || category.toLowerCase();
+  // Sort: scored products first (highest score wins), then unscored,
+  // alphabetical within each group. Postgres NULLS LAST does the
+  // scored/unscored partition; the secondary alphabetical sort makes
+  // the list scan-able instead of feeling random.
   const { data, error } = await supabase
     .from("products")
     .select("*")
     .eq("category", dbCat as ProductCategory)
     .or(PUBLIC_ONLY)
-    .order("scan_count", { ascending: false })
+    .order("safety_score", { ascending: false, nullsFirst: false })
+    .order("name", { ascending: true })
     .limit(limit);
   if (error) {
     console.error("Category browse failed:", error.message);

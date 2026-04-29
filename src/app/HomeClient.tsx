@@ -9,6 +9,7 @@ import {
 import { ProductCard } from "@/components/ProductCard";
 import { ScoreRing } from "@/components/ScoreRing";
 import { Onboarding } from "@/components/Onboarding";
+import { EditorialCard } from "@/components/EditorialCard";
 import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";
 import { getTrendingProducts, getWorstRated, getRecentProducts } from "@/lib/db";
@@ -16,6 +17,7 @@ import { useUserData } from "@/lib/userData";
 import { useUser } from "@/lib/useUser";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
+import { getCurrentIssue } from "@/lib/editorial";
 import { useEffect, useState } from "react";
 
 const stagger = {
@@ -131,6 +133,8 @@ export default function HomeClient() {
     const dbKeys = Object.entries(categoryMap).filter(([, d]) => d === cat.name).map(([k]) => k);
     return { ...cat, count: dbKeys.reduce((s, k) => s + (catCounts[k] || 0), 0) };
   });
+
+  const editorialIssue = getCurrentIssue();
 
   return (
     <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
@@ -258,6 +262,14 @@ export default function HomeClient() {
                 );
               })}
             </div>
+          </motion.div>
+        )}
+
+        {/* ── Editorial issue ── */}
+        {editorialIssue && (
+          <motion.div variants={fadeUp} className="px-4 mb-8">
+            <h2 className="text-[17px] font-semibold text-black mb-3">{t('this_week_on_sift', language)}</h2>
+            <EditorialCard issue={editorialIssue} />
           </motion.div>
         )}
 

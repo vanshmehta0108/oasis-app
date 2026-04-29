@@ -20,6 +20,8 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/LanguageProvider";
 import { t } from "@/lib/i18n";
 import { buildVerdict } from "@/lib/verdict";
+import { buildSwapCTA } from "@/lib/swap";
+import { track } from "@vercel/analytics";
 import { BuyOnline } from "@/components/BuyOnline";
 
 interface PersonalWarning {
@@ -1007,6 +1009,8 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
 
         {/* Verdict card — the "what would a friend say" moment */}
         {hasScore && (() => {
+          const seriousPersonal = (personalWarnings ?? []).filter((w) => w.severity === "serious").length;
+          const swap = buildSwapCTA(product.analysis?.healthier_alternative);
           const verdict = buildVerdict({
             score,
             harmfulCount: ingredientCounts.harmful,
@@ -1014,7 +1018,14 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
             warningsCount: product.analysis?.warnings.length ?? 0,
             summary: product.analysis?.summary,
             language,
+            userContext: {
+              conditions: userData.profile.conditions,
+              allergies: userData.profile.allergies,
+              seriousWarnings: seriousPersonal,
+            },
+            hasAlternative: !!swap,
           });
+          const showSwap = swap && (verdict.tone === "skip" || verdict.tone === "avoid" || verdict.tone === "occasional");
           return (
             <motion.div variants={fadeUp} className="px-5 mb-4">
               <div
@@ -1044,6 +1055,28 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
                     <p className="text-[12px] leading-relaxed text-black/55 mt-2 pt-2 border-t border-black/[0.06]">
                       {product.analysis.summary}
                     </p>
+                  )}
+                  {showSwap && swap && (
+                    <a
+                      href={swap.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => track("swap_click", {
+                        platform: "instamart",
+                        from: product.name,
+                        to: swap.query,
+                        tone: verdict.tone,
+                      })}
+                      className="mt-3 inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-[13px] font-semibold transition-transform active:scale-95"
+                      style={{
+                        background: verdict.accent,
+                        color: "#FFFFFF",
+                        boxShadow: `0 4px 12px -2px ${verdict.accent}55`,
+                      }}
+                    >
+                      <ExternalLink size={13} strokeWidth={2.4} />
+                      {swap.label}
+                    </a>
                   )}
                 </div>
               </div>

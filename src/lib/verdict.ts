@@ -27,6 +27,17 @@ interface VerdictInput {
   warningsCount?: number;
   summary?: string;
   language?: Language;
+  // Wave 2 — optional personalization context. When the user has set their
+  // health profile, the verdict can sharpen ("worth a closer look" → "we'd
+  // skip this for you"). When absent, behavior is identical to wave 1.
+  userContext?: {
+    conditions?: string[];   // e.g. ["Diabetic", "Heart Condition"]
+    allergies?: string[];    // e.g. ["Nuts", "Dairy"]
+    seriousWarnings?: number; // count of "serious" PersonalWarnings the API returned
+  };
+  // Wave 2 — when a healthier alternative is available we can reshape the
+  // subhead to nudge toward the swap rather than just describing the problem.
+  hasAlternative?: boolean;
 }
 
 // Color tokens — kept here (not in CSS) because they're verdict-specific
@@ -54,7 +65,11 @@ export function toneFromScore(score: number | null): VerdictTone {
 // subhead nudges sharper when the analysis surfaces specific counts.
 export function buildVerdict(input: VerdictInput): Verdict {
   const lang = input.language ?? "en";
-  const tone = toneFromScore(input.score);
+  // Personalization may bump tone — a "mostly fine" cereal becomes "skip"
+  // for a diabetic if it's loaded with sugar. We only bump *down* (more
+  // cautious), never up.
+  const baseTone = toneFromScore(input.score);
+  const tone = adjustForUser(baseTone, input);
   const colors = TONE_COLORS[tone];
 
   const headline = (() => {
@@ -78,6 +93,29 @@ export function buildVerdict(input: VerdictInput): Verdict {
   };
 }
 
+// Bumps the verdict toward more caution when the user has signalled health
+// context that intersects with the product's flagged ingredients. This is
+// the "this app knows me" moment — the verdict reads differently for a
+// diabetic looking at a sugary cereal than it does for everyone else.
+function adjustForUser(base: VerdictTone, input: VerdictInput): VerdictTone {
+  const ctx = input.userContext;
+  if (!ctx) return base;
+  const conditions = ctx.conditions?.length ?? 0;
+  const allergies = ctx.allergies?.length ?? 0;
+  const serious = ctx.seriousWarnings ?? 0;
+  if (conditions === 0 && allergies === 0) return base;
+
+  const order: VerdictTone[] = ["clean", "mostly", "occasional", "skip", "avoid"];
+  const idx = order.indexOf(base);
+
+  // Two or more serious personal warnings → push at least to "skip".
+  if (serious >= 2 && idx < order.indexOf("skip")) return "skip";
+  // One serious warning → bump one notch down (more cautious).
+  if (serious >= 1 && idx < order.indexOf("avoid")) return order[idx + 1];
+
+  return base;
+}
+
 function pickSubhead(tone: VerdictTone, input: VerdictInput, lang: Language): string {
   const harmful = input.harmfulCount ?? 0;
   const beneficial = input.beneficialCount ?? 0;
@@ -95,23 +133,32 @@ function pickSubhead(tone: VerdictTone, input: VerdictInput, lang: Language): st
     }
   }
 
-  // English — count-aware, sharper
+  const altSuffix = input.hasAlternative ? " There's a better pick below." : "";
+  const personal = input.userContext;
+  const seriousPersonal = (personal?.seriousWarnings ?? 0) >= 1;
+
+  // English — count-aware, sharper. When the user has serious personal
+  // warnings, the subhead becomes second-person — "for you specifically".
   switch (tone) {
     case "clean":
       if (beneficial >= 3) return `Clean ingredients — ${beneficial} we'd actively recommend.`;
       return "Clean ingredients. No real concerns.";
     case "mostly":
-      if (harmful === 1) return "One ingredient is worth a closer look — otherwise fine.";
-      if (harmful >= 2)  return `${harmful} ingredients are worth a closer look — otherwise fine.`;
+      if (seriousPersonal) return `Generally fine — but one ingredient hits your profile.${altSuffix}`;
+      if (harmful === 1)   return `One ingredient is worth a closer look — otherwise fine.${altSuffix}`;
+      if (harmful >= 2)    return `${harmful} ingredients are worth a closer look — otherwise fine.${altSuffix}`;
       return "Mostly fine. No red flags.";
     case "occasional":
-      if (harmful >= 3)  return `${harmful} ingredients we'd watch. Fine occasionally, not daily.`;
-      return "Not your daily — fine for a treat.";
+      if (seriousPersonal) return `Not for your health profile — we'd skip it.${altSuffix}`;
+      if (harmful >= 3)    return `${harmful} ingredients we'd watch. Fine occasionally, not daily.${altSuffix}`;
+      return `Not your daily — fine for a treat.${altSuffix}`;
     case "skip":
-      if (harmful >= 3)  return `${harmful} ingredients we'd rather not eat. Better picks below.`;
-      return "Several ingredients we'd rather not eat. Better picks below.";
+      if (seriousPersonal) return `We'd skip it for you — multiple things on your no-go list.${altSuffix || " Better picks below."}`;
+      if (harmful >= 3)    return `${harmful} ingredients we'd rather not eat.${altSuffix || " Better picks below."}`;
+      return `Several ingredients we'd rather not eat.${altSuffix || " Better picks below."}`;
     case "avoid":
-      if (harmful >= 4)  return `${harmful} flagged ingredients. We'd put it back.`;
+      if (seriousPersonal) return "This one's not for you — full stop.";
+      if (harmful >= 4)    return `${harmful} flagged ingredients. We'd put it back.`;
       return "Full of stuff we'd skip. We'd put it back.";
   }
 }

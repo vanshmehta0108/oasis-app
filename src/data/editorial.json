@@ -1,0 +1,37 @@
+{
+  "issues": [
+    {
+      "id": "2026-w17-kids-snacks",
+      "publishedAt": "2026-04-28",
+      "kicker": "Kids' snacks",
+      "headline": "5 popular kids' snacks we'd put back",
+      "subhead": "Most are 60%+ sugar and refined oils. We checked the labels so you don't have to.",
+      "tone": "skip",
+      "cta": "See the list",
+      "href": "/search?category=Snacks",
+      "tag": "What we're flagging"
+    },
+    {
+      "id": "2026-w17-cleaner-biscuits",
+      "publishedAt": "2026-04-26",
+      "kicker": "Better picks",
+      "headline": "8 biscuit brands that actually use whole grains",
+      "subhead": "Real ragi, real oats, no maida hidden behind 'multigrain' branding.",
+      "tone": "clean",
+      "cta": "Browse picks",
+      "href": "/search?category=Snacks",
+      "tag": "Cleaner shelf"
+    },
+    {
+      "id": "2026-w17-monsoon-hydration",
+      "publishedAt": "2026-04-22",
+      "kicker": "Beverages",
+      "headline": "What's actually in your 'electrolyte' drink",
+      "subhead": "Most are flavored sugar water. Three brands get it right.",
+      "tone": "occasional",
+      "cta": "See breakdown",
+      "href": "/search?category=Beverages",
+      "tag": "Honest review"
+    }
+  ]
+}
