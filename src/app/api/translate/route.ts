@@ -5,6 +5,7 @@ import { z } from "zod";
 import { translateAnalysis } from "@/lib/scoring";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { log } from "@/lib/log";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 import type { SafetyAnalysis } from "@/lib/scoring";
 
 const TranslateRequest = z.object({
@@ -26,25 +27,20 @@ const TranslateRequest = z.object({
   targetLang: z.enum(["hi"]),
 });
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = checkRateLimit(`translate:${ip}`, { capacity: 30, refillPerMin: 30 });
   if (!rl.ok) {
     return NextResponse.json(
       { error: "Rate limit exceeded", retryAfter: rl.retryAfter },
-      { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
+      { status: 429, headers: { ...cors, "Retry-After": String(rl.retryAfter) } },
     );
   }
 
@@ -54,7 +50,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid request", details: parsed.error.issues[0]?.message },
-        { status: 400, headers: corsHeaders() },
+        { status: 400, headers: cors },
       );
     }
 
@@ -73,14 +69,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const translated = await translateAnalysis(normalized, parsed.data.targetLang);
     log.info("translate.ok", { ip, targetLang: parsed.data.targetLang, ingredients: translated.ingredients.length });
-    return NextResponse.json({ analysis: translated }, { headers: corsHeaders() });
+    return NextResponse.json({ analysis: translated }, { headers: cors });
   } catch (err) {
     log.error("translate.fail", { ip, err: err instanceof Error ? err.message : String(err) });
     const message = err instanceof Error ? err.message : "Translation failed";
     const isRateLimit = /rate|quota|429|resource_exhausted/i.test(message);
     return NextResponse.json(
       { error: isRateLimit ? "AI temporarily unavailable" : "Translation failed" },
-      { status: isRateLimit ? 429 : 500, headers: corsHeaders() },
+      { status: isRateLimit ? 429 : 500, headers: cors },
     );
   }
 }

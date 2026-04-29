@@ -4,47 +4,40 @@ import { masterLookup } from "@/lib/master";
 import { getProductByBarcode } from "@/lib/db";
 import { fetchProductByBarcode } from "@/lib/openfoodfacts";
 import { enrichByBarcode } from "@/lib/webEnrich";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
 const LookupRequest = z.object({
-  barcode: z.string().min(1, "Barcode is required"),
+  barcode: z.string().min(1, "Barcode is required").max(64, "Barcode too long"),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "X-RateLimit-Limit": "60",
-    "X-RateLimit-Remaining": "59",
-    "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 60),
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-function errorResponse(message: string, status: number, details?: string): NextResponse {
+function errorResponse(req: NextRequest, message: string, status: number, details?: string): NextResponse {
   return NextResponse.json(
     { error: message, ...(details ? { details } : {}) },
-    { status, headers: corsHeaders() }
+    { status, headers: corsHeadersFor(req, corsOpts) }
   );
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
   try {
     const body = await req.json();
     const parsed = LookupRequest.safeParse(body);
 
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
-      return errorResponse("Invalid request", 400, firstIssue?.message);
+      return errorResponse(req, "Invalid request", 400, firstIssue?.message);
     }
 
     const { barcode } = parsed.data;
@@ -70,7 +63,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
           needs_analysis: false,
         },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
@@ -96,7 +89,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
           needs_analysis: !dbProduct.analysis,
         },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
@@ -119,7 +112,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
           needs_analysis: true,
         },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
@@ -144,19 +137,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           confidence: enriched.confidence,
           sources: enriched.source_urls,
         },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
     // 4. Not found anywhere
-    return errorResponse(
+    return errorResponse(req,
       "Product not found",
       404,
       `No product found for barcode: ${barcode}`
     );
   } catch (error) {
-    console.error("Lookup error:", error);
+    console.error("Lookup error:", error instanceof Error ? error.message : String(error));
     const message = error instanceof Error ? error.message : "Lookup failed";
-    return errorResponse(message, 500);
+    return errorResponse(req, message, 500);
   }
 }

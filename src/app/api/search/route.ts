@@ -1,47 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { masterSearch } from "@/lib/master";
 import { supabase } from "@/lib/supabase";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "X-RateLimit-Limit": "100",
-    "X-RateLimit-Remaining": "99",
-    "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 60),
-  };
-}
+const corsOpts = { methods: ["GET", "OPTIONS"] as const };
 
-function errorResponse(message: string, status: number, details?: string): NextResponse {
+function errorResponse(req: NextRequest, message: string, status: number, details?: string): NextResponse {
   return NextResponse.json(
     { error: message, ...(details ? { details } : {}) },
-    { status, headers: corsHeaders() }
+    { status, headers: corsHeadersFor(req, corsOpts) }
   );
+}
+
+// Strip control chars + Postgres ilike wildcards from user search input. Even
+// though Supabase parameterizes, escaping the % and _ wildcards prevents users
+// from converting a 2-char search into a slow full-table scan.
+function escapeIlike(s: string): string {
+  return s.replace(/[%_\\]/g, (m) => `\\${m}`);
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit(`search:${ip}`, { capacity: 60, refillPerMin: 60 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate_limit", retryAfter: rl.retryAfter },
+      { status: 429, headers: { ...cors, "Retry-After": String(rl.retryAfter) } },
+    );
+  }
   try {
     const { searchParams } = new URL(req.url);
-    const q = searchParams.get("q")?.trim();
-    const category = searchParams.get("category");
+    const rawQ = searchParams.get("q")?.trim();
+    const category = searchParams.get("category")?.slice(0, 30);
     const rawLimit = parseInt(searchParams.get("limit") ?? "20", 10);
-    const limit = Math.min(Math.max(1, rawLimit), 100);
+    const limit = Math.min(Math.max(1, rawLimit), 50);
 
-    if (!q || q.length < 2) {
-      return errorResponse(
+    if (!rawQ || rawQ.length < 2) {
+      return errorResponse(req,
         "Search query must be at least 2 characters",
         400
       );
     }
+    if (rawQ.length > 100) {
+      return errorResponse(req, "Search query too long", 400);
+    }
+    const q = escapeIlike(rawQ);
 
     let query = supabase
       .from("products")
@@ -57,8 +70,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const { data, error } = await query;
 
     if (error) {
-      console.error("Search error:", error);
-      return errorResponse("Search failed", 500, error.message);
+      console.error("Search error:", error.message);
+      return errorResponse(req, "Search failed", 500);
     }
 
     const dbResults = data ?? [];
@@ -81,17 +94,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const results = [...dbResults, ...extraFromMaster].slice(0, limit);
 
     return NextResponse.json(
-      { results, count: results.length, query: q },
+      { results, count: results.length, query: rawQ },
       {
         headers: {
-          ...corsHeaders(),
+          ...cors,
           "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
         },
       }
     );
   } catch (error) {
-    console.error("Search error:", error);
-    const message = error instanceof Error ? error.message : "Search failed";
-    return errorResponse(message, 500);
+    console.error("Search error:", error instanceof Error ? error.message : String(error));
+    return errorResponse(req, "Search failed", 500);
   }
 }

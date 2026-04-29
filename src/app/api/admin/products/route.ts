@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 function isAuthorized(req: NextRequest): boolean {
-  const key = req.headers.get("x-admin-key") || req.nextUrl.searchParams.get("key");
-  return key === process.env.ADMIN_SECRET;
+  // Header-only — querystring keys leak via proxy logs, browser history, referrers.
+  const key = req.headers.get("x-admin-key");
+  return !!process.env.ADMIN_SECRET && key === process.env.ADMIN_SECRET;
 }
 
 export async function GET(req: NextRequest) {

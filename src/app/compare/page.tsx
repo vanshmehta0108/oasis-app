@@ -193,7 +193,7 @@ export default function ComparePage() {
 
   return (
     <div className="min-h-dvh pb-24" style={{ background: "#F2F2F7" }}>
-      <div className="max-w-lg mx-auto px-4 pt-14">
+      <div className="max-w-lg mx-auto px-4" style={{ paddingTop: "max(3.5rem, env(safe-area-inset-top))" }}>
         {/* Header */}
         <div className="fixed top-4 left-4 z-50">
           <motion.button

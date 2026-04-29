@@ -6,6 +6,7 @@ import { getPersonalizedAnalysis } from "@/lib/scoring";
 import { dedupeProfile, profileHash } from "@/lib/allergens";
 import { log } from "@/lib/log";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 
 const PersonalizeRequest = z.object({
   ingredients: z.array(z.string().min(1)).min(1, "Ingredients required").max(200),
@@ -13,13 +14,8 @@ const PersonalizeRequest = z.object({
   allergies: z.array(z.string()).default([]),
 });
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
+const corsHeaders = (req: NextRequest) => corsHeadersFor(req, corsOpts);
 
 // ── In-memory cache ───────────────────────────────────────────────────────
 // LRU keyed on (ingredients-hash :: profile-hash). Sized small — Vercel
@@ -72,27 +68,36 @@ function setCached(key: string, payload: CacheEntry["payload"]): void {
 
 // ── Handlers ──────────────────────────────────────────────────────────────
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeaders(req);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = checkRateLimit(`personalize:${ip}`, { capacity: 20, refillPerMin: 20 });
   if (!rl.ok) {
     return NextResponse.json(
       { error: "rate_limit", retryAfter: rl.retryAfter },
-      { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
+      { status: 429, headers: { ...cors, "Retry-After": String(rl.retryAfter) } },
     );
   }
 
   try {
+    // Cap body size before parsing — defends against giant JSON payloads.
+    const contentLength = Number(req.headers.get("content-length") ?? "0");
+    if (contentLength > 64 * 1024) {
+      return NextResponse.json(
+        { error: "payload_too_large" },
+        { status: 413, headers: cors },
+      );
+    }
     const body = await req.json();
     const parsed = PersonalizeRequest.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: "invalid_request", details: parsed.error.issues[0]?.message },
-        { status: 400, headers: corsHeaders() },
+        { status: 400, headers: cors },
       );
     }
 
@@ -105,7 +110,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (conditions.length === 0 && allergies.length === 0) {
       return NextResponse.json(
         { warnings: [], penalty: 0, deterministicCount: 0, llmCount: 0, llmCalled: false, cached: false },
-        { headers: corsHeaders() },
+        { headers: cors },
       );
     }
 
@@ -118,7 +123,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
       return NextResponse.json(
         { ...cached, cached: true },
-        { headers: corsHeaders() },
+        { headers: cors },
       );
     }
 
@@ -137,14 +142,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       llmError: result.llmError,
     });
 
-    return NextResponse.json({ ...result, cached: false }, { headers: corsHeaders() });
+    return NextResponse.json({ ...result, cached: false }, { headers: cors });
   } catch (err) {
     log.error("personalize.fail", { err: err instanceof Error ? err.message : String(err) });
     const message = err instanceof Error ? err.message : "Personalization failed";
     const isRateLimit = /rate|quota|429|resource_exhausted/i.test(message);
     return NextResponse.json(
       { error: isRateLimit ? "ai_unavailable" : "personalize_failed" },
-      { status: isRateLimit ? 429 : 500, headers: corsHeaders() },
+      { status: isRateLimit ? 429 : 500, headers: cors },
     );
   }
 }

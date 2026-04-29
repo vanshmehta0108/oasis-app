@@ -367,13 +367,16 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       if (updateErr) {
         // PGRST204 = PostgREST "column not found in schema cache". This means
         // cloud-migration.sql hasn't been run yet. Persist to localStorage so
-        // state survives reloads; don't revert or throw.
+        // state survives reloads. We surface a non-blocking error flag so the
+        // UI can show a banner — silent fallback hides the schema mismatch
+        // and users would never know their cloud sync wasn't actually working.
         if (
           updateErr.code === "PGRST204" ||
           updateErr.code === "42703" ||
           updateErr.message?.includes("schema cache")
         ) {
           saveLocalExt(next);
+          setError("migration_required");
           console.warn("user_profiles schema outdated — run docs/cloud-migration.sql:", updateErr.message);
           return;
         }

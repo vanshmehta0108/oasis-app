@@ -2,48 +2,50 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { analyzeIngredients } from "@/lib/scoring";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
+import { checkRateLimit } from "@/lib/rateLimit";
 import type { Product } from "@/lib/database.types";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
 const ScanRequest = z.object({
-  barcode: z.string().min(1, "Barcode is required"),
+  barcode: z.string().min(1, "Barcode is required").max(64),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "X-RateLimit-Limit": "60",
-    "X-RateLimit-Remaining": "59",
-    "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 60),
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-function errorResponse(message: string, status: number, details?: string): NextResponse {
+function errorResponse(req: NextRequest, message: string, status: number, details?: string): NextResponse {
   return NextResponse.json(
     { error: message, ...(details ? { details } : {}) },
-    { status, headers: corsHeaders() }
+    { status, headers: corsHeadersFor(req, corsOpts) }
   );
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit(`scan:${ip}`, { capacity: 60, refillPerMin: 60 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate_limit", retryAfter: rl.retryAfter },
+      { status: 429, headers: { ...cors, "Retry-After": String(rl.retryAfter) } },
+    );
+  }
   try {
     const body = await req.json();
     const parsed = ScanRequest.safeParse(body);
 
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
-      return errorResponse("Invalid request", 400, firstIssue?.message);
+      return errorResponse(req, "Invalid request", 400, firstIssue?.message);
     }
 
     const { barcode } = parsed.data;
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const product = rawProduct as Product | null;
 
     if (!product) {
-      return errorResponse("Product not found", 404, `No product found for barcode: ${barcode}`);
+      return errorResponse(req, "Product not found", 404, `No product found for barcode: ${barcode}`);
     }
 
     // Increment scan count
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           product: { ...product, scan_count: product.scan_count + 1 },
           analysis: product.analysis,
         },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
@@ -107,18 +109,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
           analysis,
         },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
     // No ingredients — can't analyze
     return NextResponse.json(
       { found: true, needs_ingredients: true, product },
-      { headers: corsHeaders() }
+      { headers: cors }
     );
   } catch (error) {
-    console.error("Scan error:", error);
-    const message = error instanceof Error ? error.message : "Scan failed";
-    return errorResponse(message, 500);
+    console.error("Scan error:", error instanceof Error ? error.message : String(error));
+    return errorResponse(req, "Scan failed", 500);
   }
 }

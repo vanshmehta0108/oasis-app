@@ -225,9 +225,41 @@ export default function ProfilePage() {
   }
 
   async function handleSignOut() {
-    if (!confirm("Sign out? You'll lose access to your cross-device history on this browser until you sign back in.")) return;
+    if (!confirm(t('signout_confirm', language))) return;
     await signOut();
     showToast(t('signed_out', language), "info");
+  }
+
+  async function handleDeleteMyData() {
+    const typed = window.prompt(t('delete_my_data_confirm', language));
+    if (typed === null) return; // cancelled
+    if (typed.trim() !== "DELETE") {
+      showToast(t('delete_my_data_typed_wrong', language), "error");
+      return;
+    }
+    try {
+      // Get the user's JWT to authorize the delete request.
+      const { data: sess } = await import("@/lib/supabase").then((m) => m.supabase.auth.getSession());
+      const token = sess?.session?.access_token;
+      if (!token) {
+        showToast(t('delete_my_data_failed', language), "error");
+        return;
+      }
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        showToast(t('delete_my_data_failed', language), "error");
+        return;
+      }
+      // Wipe local state too.
+      try { localStorage.removeItem("sift-ext"); localStorage.removeItem("sift-onboarded"); } catch {}
+      await signOut();
+      showToast(t('delete_my_data_success', language), "info");
+    } catch {
+      showToast(t('delete_my_data_failed', language), "error");
+    }
   }
 
   const toggleCondition = (c: string) => {
@@ -293,7 +325,8 @@ export default function ProfilePage() {
   return (
     <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
       <motion.div
-        className="px-4 pt-12 pb-24 max-w-lg mx-auto"
+        className="px-4 pb-24 max-w-lg mx-auto"
+        style={{ paddingTop: "max(3rem, env(safe-area-inset-top))" }}
         initial="hidden"
         animate="show"
         variants={stagger}
@@ -334,19 +367,29 @@ export default function ProfilePage() {
           )}
           {!authAvailable && (
             <span className="mt-3 text-[10px] max-w-xs text-center" style={{ color: "#8E8E93" }}>
-              Cloud sync not yet enabled for this deployment — your data stays on this device.
+              {t('cloud_sync_disabled', language)}
             </span>
           )}
           {user && !isAnonymous && (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={handleSignOut}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium"
-              style={{ color: "#8E8E93" }}
-            >
-              <LogOut size={12} aria-hidden="true" />
-              {t('sign_out', language)}
-            </motion.button>
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-1.5 text-xs font-medium"
+                style={{ color: "#8E8E93" }}
+              >
+                <LogOut size={12} aria-hidden="true" />
+                {t('sign_out', language)}
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={handleDeleteMyData}
+                className="text-[11px] font-medium underline"
+                style={{ color: "#CC1010" }}
+              >
+                {t('delete_my_data', language)}
+              </motion.button>
+            </div>
           )}
         </motion.div>
 
@@ -608,6 +651,25 @@ export default function ProfilePage() {
               </motion.button>
             </div>
           </div>
+        </motion.div>
+
+        {/* Footer — privacy + about */}
+        <motion.div variants={fadeUp} className="mt-6 mb-2 flex justify-center gap-4">
+          <Link
+            href="/privacy"
+            className="text-[11px] font-medium"
+            style={{ color: "#8E8E93" }}
+          >
+            {t('privacy_link', language)}
+          </Link>
+          <span className="text-[11px]" style={{ color: "#C7C7CC" }}>·</span>
+          <a
+            href="mailto:privacy@sift-india.app"
+            className="text-[11px] font-medium"
+            style={{ color: "#8E8E93" }}
+          >
+            privacy@sift-india.app
+          </a>
         </motion.div>
       </motion.div>
     </div>

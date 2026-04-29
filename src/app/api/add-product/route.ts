@@ -3,29 +3,25 @@ import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { log } from "@/lib/log";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 
 const AddProductRequest = z.object({
-  name: z.string().min(1, "Product name is required"),
-  brand: z.string().default("Unknown"),
-  category: z.string().default("food"),
-  ingredients: z.array(z.string()).default([]),
-  barcode: z.string().optional(),
-  user_id: z.string().optional(),
+  name: z.string().min(1, "Product name is required").max(200),
+  brand: z.string().default("Unknown").transform((s) => s.slice(0, 100)),
+  category: z.string().default("food").transform((s) => s.slice(0, 30)),
+  ingredients: z.array(z.string().min(1).max(200)).default([]).transform((arr) => arr.slice(0, 100)),
+  barcode: z.string().max(64).optional(),
+  user_id: z.string().max(100).optional(),
 });
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = checkRateLimit(`add-product:${ip}`, { capacity: 5, refillPerMin: 5 / 60 });
   if (!rl.ok) {
@@ -36,7 +32,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         details: `Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.`,
         retryAfter: rl.retryAfter,
       },
-      { status: 429, headers: { ...corsHeaders(), "Retry-After": String(rl.retryAfter) } },
+      { status: 429, headers: { ...cors, "Retry-After": String(rl.retryAfter) } },
     );
   }
 
@@ -47,7 +43,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid request", details: parsed.error.issues[0]?.message },
-        { status: 400, headers: corsHeaders() },
+        { status: 400, headers: cors },
       );
     }
 
@@ -79,7 +75,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       log.error("add_product.db_fail", { ip, err: error.message });
       return NextResponse.json(
         { error: "Failed to save submission", details: error.message },
-        { status: 500, headers: corsHeaders() },
+        { status: 500, headers: cors },
       );
     }
 
@@ -90,14 +86,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         pending: true,
         message: "Submitted for review. We'll add it to the catalog after a moderator verifies the ingredients.",
       },
-      { status: 201, headers: corsHeaders() },
+      { status: 201, headers: cors },
     );
   } catch (error) {
     log.error("add_product.fail", { ip, err: error instanceof Error ? error.message : String(error) });
     const message = error instanceof Error ? error.message : "Failed to add product";
     return NextResponse.json(
       { error: message },
-      { status: 500, headers: corsHeaders() },
+      { status: 500, headers: cors },
     );
   }
 }

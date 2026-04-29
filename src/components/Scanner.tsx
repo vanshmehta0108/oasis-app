@@ -112,9 +112,25 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onPhoto) return;
+    // Reject non-images and oversize files before they reach FileReader.
+    // 7MB raw is the server cap; we leave a small headroom for base64
+    // expansion (~33%) and bail out client-side so users see a helpful
+    // error instead of a 413 from the API.
+    if (!file.type.startsWith("image/")) {
+      setError("That file isn't an image. Please pick a JPG, PNG, or HEIC photo.");
+      return;
+    }
+    const MAX_BYTES = 7 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      setError(`That image is ${(file.size / (1024 * 1024)).toFixed(1)}MB — please pick one under 7MB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") onPhoto(reader.result);
+    };
+    reader.onerror = () => {
+      setError("Couldn't read that image. Try a different photo.");
     };
     reader.readAsDataURL(file);
   };

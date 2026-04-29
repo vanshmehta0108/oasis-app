@@ -2,51 +2,45 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { analyzeLabel } from "@/lib/scoring";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
 const SubmitRequest = z.object({
-  product_name: z.string().min(1, "Product name is required"),
-  barcode: z.string().optional(),
-  label_image: z.string().min(100, "Label image data is too short to be valid"),
-  extracted_ingredients: z.array(z.string().min(1)).optional(),
-  user_id: z.string().optional(),
+  product_name: z.string().min(1, "Product name is required").max(200),
+  barcode: z.string().max(64).optional(),
+  // Label image as base64 data URL — capped at ~7MB raw image (10MB base64).
+  label_image: z.string().min(100, "Label image data is too short to be valid").max(10_000_000, "Image too large — keep under 7MB"),
+  extracted_ingredients: z.array(z.string().min(1).max(200)).max(100).optional(),
+  user_id: z.string().max(100).optional(),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "X-RateLimit-Limit": "10",
-    "X-RateLimit-Remaining": "9",
-    "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 60),
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-function errorResponse(message: string, status: number, details?: string): NextResponse {
+function errorResponse(req: NextRequest, message: string, status: number, details?: string): NextResponse {
   return NextResponse.json(
     { error: message, ...(details ? { details } : {}) },
-    { status, headers: corsHeaders() }
+    { status, headers: corsHeadersFor(req, corsOpts) }
   );
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
   try {
     const body = await req.json();
     const parsed = SubmitRequest.safeParse(body);
 
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
-      return errorResponse("Invalid request", 400, firstIssue?.message);
+      return errorResponse(req, "Invalid request", 400, firstIssue?.message);
     }
 
     const { product_name, barcode, label_image, extracted_ingredients, user_id } = parsed.data;
@@ -76,7 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (error) {
       console.error("Submission error:", error);
-      return errorResponse("Failed to save submission", 500, error.message);
+      return errorResponse(req, "Failed to save submission", 500, error.message);
     }
 
     return NextResponse.json(
@@ -84,11 +78,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         submission,
         extracted: { ingredients, label_data: labelData },
       },
-      { status: 201, headers: corsHeaders() }
+      { status: 201, headers: cors }
     );
   } catch (error) {
     console.error("Submit error:", error);
     const message = error instanceof Error ? error.message : "Submission failed";
-    return errorResponse(message, 500);
+    return errorResponse(req, message, 500);
   }
 }

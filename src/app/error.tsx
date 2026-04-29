@@ -1,11 +1,24 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { t, type Language } from "@/lib/i18n";
+
 interface ErrorProps {
   error: Error & { digest?: string };
   reset: () => void;
 }
 
 export default function ErrorPage({ error, reset }: ErrorProps) {
+  // Read language from localStorage directly — LanguageProvider may not be
+  // mounted by the time this error boundary renders, so we don't rely on
+  // useLanguage() here.
+  const [lang, setLang] = useState<Language>("en");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("sift-language");
+    if (stored === "hi" || stored === "en") setLang(stored);
+  }, []);
+
   return (
     <div className="min-h-dvh bg-oasis-black flex flex-col items-center justify-center px-6 text-center">
       {/* Error icon */}
@@ -27,11 +40,10 @@ export default function ErrorPage({ error, reset }: ErrorProps) {
 
       {/* Message */}
       <h2 className="text-2xl font-semibold text-oasis-text mb-3">
-        Something went wrong
+        {t('error_something_wrong', lang)}
       </h2>
       <p className="text-oasis-muted max-w-sm mb-2">
-        An unexpected error occurred. This has been logged and we are working on
-        a fix.
+        {t('error_generic_body', lang)}
       </p>
       {error.digest && (
         <p className="text-xs text-oasis-muted/60 mb-8 font-mono">
@@ -44,7 +56,7 @@ export default function ErrorPage({ error, reset }: ErrorProps) {
         onClick={reset}
         className="px-6 py-3 bg-oasis-green text-oasis-black font-semibold rounded-xl hover:bg-oasis-green-dim transition-colors"
       >
-        Try Again
+        {t('error_try_again', lang)}
       </button>
     </div>
   );

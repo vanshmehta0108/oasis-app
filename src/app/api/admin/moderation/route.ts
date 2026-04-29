@@ -6,7 +6,8 @@ import { log } from "@/lib/log";
 import type { ProductInsert, ProductCategory, ScoreGrade } from "@/lib/database.types";
 
 function isAuthorized(req: NextRequest): boolean {
-  const key = req.headers.get("x-admin-key") || req.nextUrl.searchParams.get("key");
+  // Header-only — querystring keys leak via proxy logs, browser history, referrers.
+  const key = req.headers.get("x-admin-key");
   const secret = process.env.ADMIN_SECRET;
   return !!secret && key === secret;
 }

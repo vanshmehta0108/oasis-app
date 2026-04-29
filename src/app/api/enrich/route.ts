@@ -3,33 +3,28 @@ export const runtime = "edge";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { enrichByName, enrichByBarcode, batchEnrich } from "@/lib/webEnrich";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
 const EnrichRequest = z.object({
-  name: z.string().min(1).optional(),
-  brand: z.string().optional(),
-  barcode: z.string().min(1).optional(),
+  name: z.string().min(1).max(200).optional(),
+  brand: z.string().max(100).optional(),
+  barcode: z.string().min(1).max(64).optional(),
   batch: z
-    .array(z.object({ name: z.string().min(1), brand: z.string().optional() }))
+    .array(z.object({ name: z.string().min(1).max(200), brand: z.string().max(100).optional() }))
     .max(10, "Maximum 10 products per batch")
     .optional(),
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): HeadersInit {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-function errorResponse(message: string, status: number, details?: string): NextResponse {
+function errorResponse(req: NextRequest, message: string, status: number, details?: string): NextResponse {
   return NextResponse.json(
     { error: message, ...(details ? { details } : {}) },
-    { status, headers: corsHeaders() }
+    { status, headers: corsHeadersFor(req, corsOpts) }
   );
 }
 
@@ -38,17 +33,18 @@ function errorResponse(message: string, status: number, details?: string): NextR
 // AI safety analysis happens separately via /api/analyze (called by the product page).
 // This keeps each Edge function call well under the 30s timeout.
 
-export async function OPTIONS(): Promise<NextResponse> {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const cors = corsHeadersFor(req, corsOpts);
   try {
     const body = await req.json();
     const parsed = EnrichRequest.safeParse(body);
 
     if (!parsed.success) {
-      return errorResponse("Invalid request", 400, parsed.error.issues[0]?.message);
+      return errorResponse(req, "Invalid request", 400, parsed.error.issues[0]?.message);
     }
 
     const { name, brand, barcode, batch } = parsed.data;
@@ -64,13 +60,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       return NextResponse.json(
         { mode: "batch", total: batch.length, found: results.filter((r) => r.found).length, results },
-        { headers: corsHeaders() }
+        { headers: cors }
       );
     }
 
     // ── Single product ──────────────────────────────────────────────────────
     if (!name && !barcode) {
-      return errorResponse("Provide 'name', 'barcode', or 'batch' array", 400);
+      return errorResponse(req, "Provide 'name', 'barcode', or 'batch' array", 400);
     }
 
     const product = barcode
@@ -80,7 +76,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!product || product.ingredients.length === 0) {
       return NextResponse.json(
         { found: false, message: `Could not find product details for: ${name || barcode}`, product: product || null },
-        { status: 404, headers: corsHeaders() }
+        { status: 404, headers: cors }
       );
     }
 
@@ -100,10 +96,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         },
         needs_analysis: true,
       },
-      { headers: corsHeaders() }
+      { headers: cors }
     );
   } catch (error) {
-    console.error("Enrich error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Enrichment failed", 500);
+    console.error("Enrich error:", error instanceof Error ? error.message : String(error));
+    return errorResponse(req, "Enrichment failed", 500);
   }
 }

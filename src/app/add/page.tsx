@@ -6,15 +6,17 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Plus, Loader2, Camera, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 const CATEGORIES = [
-  { label: "Food", value: "food" },
-  { label: "Beverage", value: "beverage" },
-  { label: "Snack", value: "snack" },
-  { label: "Dairy", value: "dairy" },
-  { label: "Skincare", value: "skincare" },
-  { label: "Baby Food", value: "baby_food" },
-  { label: "Household", value: "household" },
+  { labelKey: "category_food" as const, value: "food" },
+  { labelKey: "category_beverage" as const, value: "beverage" },
+  { labelKey: "category_snack" as const, value: "snack" },
+  { labelKey: "category_dairy" as const, value: "dairy" },
+  { labelKey: "category_skincare" as const, value: "skincare" },
+  { labelKey: "category_baby_food" as const, value: "baby_food" },
+  { labelKey: "category_household" as const, value: "household" },
 ];
 
 export default function AddProductPage() {
@@ -28,6 +30,7 @@ export default function AddProductPage() {
 function AddProductForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { language } = useLanguage();
   const prefillBarcode = searchParams.get("barcode") || "";
 
   const [name, setName] = useState("");
@@ -109,10 +112,10 @@ function AddProductForm() {
               );
             }
           } else {
-            setError("Could not extract from image. Add ingredients manually.");
+            setError(t('add_product_extract_failed', language));
           }
         } catch {
-          setError("Image extraction failed. Try again or add manually.");
+          setError(t('add_product_extract_image_failed', language));
         } finally {
           setExtracting(false);
         }
@@ -125,11 +128,11 @@ function AddProductForm() {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setError("Product name is required");
+      setError(t('add_product_name_required', language));
       return;
     }
     if (ingredients.length === 0) {
-      setError("Add at least one ingredient");
+      setError(t('add_product_ingredients_required', language));
       return;
     }
 
@@ -158,7 +161,7 @@ function AddProductForm() {
         setError(data.error || "Failed to add product");
       }
     } catch {
-      setError("Network error. Check your connection.");
+      setError(t('add_product_network_error', language));
     } finally {
       setSubmitting(false);
     }
@@ -170,9 +173,9 @@ function AddProductForm() {
         <div className="w-16 h-16 rounded-full bg-[#F0FBF4] flex items-center justify-center mb-4">
           <span className="text-3xl">✓</span>
         </div>
-        <h1 className="text-[20px] font-bold text-black mb-2">Submitted for review</h1>
+        <h1 className="text-[20px] font-bold text-black mb-2">{t('add_product_submitted_title', language)}</h1>
         <p className="text-sm max-w-sm mb-6" style={{ color: "#8E8E93" }}>
-          Thanks for contributing. A moderator will check the ingredient list and add it to the public catalog shortly.
+          {t('add_product_submitted_body', language)}
         </p>
         <div className="flex gap-3">
           <Link
@@ -196,7 +199,7 @@ function AddProductForm() {
   return (
     <div className="min-h-dvh gradient-mesh pb-24">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-4">
+      <div className="flex items-center gap-3 px-5 pb-4" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}>
         <Link href="/scan" aria-label="Go back">
           <motion.div
             whileTap={{ scale: 0.9 }}
@@ -206,11 +209,11 @@ function AddProductForm() {
             )}
           >
             <ArrowLeft size={14} className="text-white/80" />
-            <span className="text-[11px] font-medium text-white/80">Back</span>
+            <span className="text-[11px] font-medium text-white/80">{t('add_product_back', language)}</span>
           </motion.div>
         </Link>
         <h1 className="font-semibold text-lg text-oasis-text">
-          Add Product
+          {t('add_product_title', language)}
         </h1>
       </div>
 
@@ -231,12 +234,12 @@ function AddProductForm() {
           {extracting ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Extracting from photo...
+              {t('add_product_extracting', language)}
             </>
           ) : (
             <>
               <Camera size={16} />
-              Auto-fill from Label Photo
+              {t('add_product_autofill', language)}
             </>
           )}
         </motion.button>
@@ -315,7 +318,7 @@ function AddProductForm() {
                     : "bg-[#1C1C1E] text-[#8E8E93]"
                 )}
               >
-                {cat.label}
+                {t(cat.labelKey, language)}
               </button>
             ))}
           </div>

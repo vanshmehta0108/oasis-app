@@ -118,6 +118,49 @@ export const EN = {
   personalize_failed: "Personalized check unavailable",
   personalize_rate_limit: "Personalization is busy — try again in a moment",
   personalize_fallback_note: "Showing the general verdict for now.",
+
+  // Add product (community submission)
+  add_product_back: "Back",
+  add_product_title: "Add Product",
+  add_product_extracting: "Extracting from photo…",
+  add_product_autofill: "Auto-fill from Label Photo",
+  add_product_extract_failed: "Couldn't read that photo. Add ingredients manually.",
+  add_product_extract_image_failed: "Image extraction failed. Try again or add manually.",
+  add_product_name_required: "Product name is required",
+  add_product_ingredients_required: "Add at least one ingredient",
+  add_product_network_error: "Network error. Check your connection.",
+  add_product_submitted_title: "Submitted for review",
+  add_product_submitted_body: "Thanks for contributing. A moderator will check the ingredients and add it to the public catalog shortly.",
+
+  // Categories (used in /add picker)
+  category_food: "Food",
+  category_beverage: "Beverage",
+  category_snack: "Snack",
+  category_dairy: "Dairy",
+  category_skincare: "Skincare",
+  category_baby_food: "Baby food",
+  category_household: "Household",
+
+  // Sign out + cloud sync
+  signout_confirm: "Sign out? You'll lose access to your synced history on this device until you sign back in.",
+  cloud_sync_disabled: "Cloud sync isn't set up — your data stays on this device.",
+
+  // Search errors
+  search_timed_out: "Search timed out — try a shorter or more specific term",
+  search_off_unavailable: "Couldn't reach the open product database — showing local results only",
+
+  // Generic error
+  error_something_wrong: "Something went wrong",
+  error_try_again: "Try again",
+  error_generic_body: "We hit an unexpected snag. The Sift team has been notified.",
+
+  // Privacy + delete data
+  privacy_link: "Privacy",
+  delete_my_data: "Delete my data",
+  delete_my_data_confirm: "This will permanently delete your account, your health profile, scan history, bookmarks, and compare list. This cannot be undone. Type DELETE to confirm.",
+  delete_my_data_typed_wrong: "Please type DELETE exactly to confirm.",
+  delete_my_data_success: "Account deleted. We're sorry to see you go.",
+  delete_my_data_failed: "Couldn't delete your account — please email privacy@sift-india.app.",
   view_comparison: "See comparison",
   remove_from_compare: "In compare — tap to remove",
   removed_from_compare: "Removed from compare",
@@ -224,8 +267,7 @@ export const EN = {
   scan_again: "Scan again",
   photograph_label: "Snap the label",
 
-  // Add product page
-  add_product_title: "Add a product",
+  // Add product page (legacy keys — kept for unrelated callers)
   auto_fill: "Fill from a label photo",
   product_name: "Product name",
   brand: "Brand",
@@ -408,6 +450,49 @@ export const HI = {
   personalize_failed: "व्यक्तिगत जाँच उपलब्ध नहीं है",
   personalize_rate_limit: "व्यक्तिगतकरण व्यस्त है — थोड़ी देर बाद देखें",
   personalize_fallback_note: "अभी सामान्य निर्णय दिखा रहे हैं।",
+
+  // Add product
+  add_product_back: "वापस",
+  add_product_title: "प्रोडक्ट जोड़ें",
+  add_product_extracting: "फ़ोटो से निकाला जा रहा है…",
+  add_product_autofill: "लेबल फ़ोटो से ऑटो-भरें",
+  add_product_extract_failed: "फ़ोटो पढ़ नहीं पाए। सामग्री खुद जोड़ें।",
+  add_product_extract_image_failed: "फ़ोटो से निकालने में नाकाम। फिर कोशिश करें या खुद जोड़ें।",
+  add_product_name_required: "प्रोडक्ट नाम ज़रूरी है",
+  add_product_ingredients_required: "कम से कम एक सामग्री जोड़ें",
+  add_product_network_error: "नेटवर्क समस्या। कनेक्शन जांचें।",
+  add_product_submitted_title: "समीक्षा के लिए भेजा गया",
+  add_product_submitted_body: "योगदान के लिए धन्यवाद। एक मॉडरेटर सामग्री जांचकर इसे जल्द ही पब्लिक कैटलॉग में जोड़ देगा।",
+
+  // Categories
+  category_food: "भोजन",
+  category_beverage: "पेय",
+  category_snack: "स्नैक",
+  category_dairy: "डेयरी",
+  category_skincare: "स्किनकेयर",
+  category_baby_food: "बेबी फ़ूड",
+  category_household: "घरेलू",
+
+  // Sign out + cloud sync
+  signout_confirm: "साइन आउट करें? जब तक वापस साइन इन नहीं करेंगे, इस डिवाइस पर सिंक की हुई हिस्ट्री नहीं दिखेगी।",
+  cloud_sync_disabled: "क्लाउड सिंक सेटअप नहीं है — आपका डेटा इसी डिवाइस पर रहेगा।",
+
+  // Search errors
+  search_timed_out: "खोज में समय लग गया — छोटा या ज़्यादा सटीक शब्द आज़माएं",
+  search_off_unavailable: "ओपन डेटाबेस तक नहीं पहुँच पाए — सिर्फ़ लोकल रिज़ल्ट दिखा रहे हैं",
+
+  // Generic error
+  error_something_wrong: "कुछ गड़बड़ हुई",
+  error_try_again: "फिर से कोशिश करें",
+  error_generic_body: "अनपेक्षित समस्या हुई। Sift टीम को सूचित कर दिया गया है।",
+
+  // Privacy + delete data
+  privacy_link: "गोपनीयता",
+  delete_my_data: "मेरा डेटा हटाएं",
+  delete_my_data_confirm: "इससे आपका अकाउंट, हेल्थ प्रोफ़ाइल, स्कैन हिस्ट्री, बुकमार्क और तुलना लिस्ट हमेशा के लिए हट जाएगी। इसे वापस नहीं लाया जा सकता। पुष्टि के लिए DELETE लिखें।",
+  delete_my_data_typed_wrong: "पुष्टि के लिए DELETE सही-सही लिखें।",
+  delete_my_data_success: "अकाउंट हटा दिया गया। आपको खोने का दुख है।",
+  delete_my_data_failed: "अकाउंट नहीं हट पाया — privacy@sift-india.app पर ईमेल करें।",
   view_comparison: "तुलना देखें",
   remove_from_compare: "तुलना में है — हटाएं",
   removed_from_compare: "तुलना से हटाया",
@@ -513,8 +598,7 @@ export const HI = {
   scan_again: "फिर से स्कैन करें",
   photograph_label: "लेबल की फ़ोटो लें",
 
-  // Add product page
-  add_product_title: "उत्पाद जोड़ें",
+  // Add product page (legacy keys — kept for unrelated callers)
   auto_fill: "लेबल फ़ोटो से भरें",
   product_name: "उत्पाद का नाम",
   brand: "ब्रांड",

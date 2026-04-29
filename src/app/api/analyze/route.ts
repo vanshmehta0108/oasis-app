@@ -8,17 +8,22 @@ import { supabase } from "@/lib/supabase";
 import { analyzeIngredients, analyzeLabel, translateAnalysis } from "@/lib/scoring";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { log } from "@/lib/log";
+import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 import type { Product, ProductInsert, ProductCategory } from "@/lib/database.types";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
+// Image size cap: 10MB base64 (~7MB raw). Larger images crash the
+// serverless function with OOM and burn AI quota for unreadable photos.
+const MAX_IMAGE_BYTES = 10_000_000;
+
 const AnalyzeRequest = z.object({
-  barcode: z.string().min(1, "Barcode cannot be empty").optional(),
-  name: z.string().optional(),
-  brand: z.string().optional(),
-  ingredients: z.array(z.string().min(1)).min(1, "Ingredients list cannot be empty").optional(),
-  image: z.string().min(100, "Image data is too short to be valid").optional(),
-  category: z.string().default("food"),
+  barcode: z.string().min(1, "Barcode cannot be empty").max(64).optional(),
+  name: z.string().max(200).optional(),
+  brand: z.string().max(100).optional(),
+  ingredients: z.array(z.string().min(1).max(200)).min(1, "Ingredients list cannot be empty").max(150).optional(),
+  image: z.string().min(100, "Image data is too short to be valid").max(MAX_IMAGE_BYTES, "Image too large — keep under 7MB").optional(),
+  category: z.string().max(30).default("food"),
   lang: z.enum(["en", "hi"]).default("en"),
 });
 
@@ -39,17 +44,11 @@ function looksLikeNutritionPanel(ingredients: string[]): boolean {
   );
 }
 
-function corsHeaders(): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
-}
+const corsOpts = { methods: ["POST", "OPTIONS"] as const };
 
-function sseHeaders(): Record<string, string> {
+function sseHeaders(req: NextRequest): Record<string, string> {
   return {
-    ...corsHeaders(),
+    ...corsHeadersFor(req, corsOpts) as Record<string, string>,
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     "X-Accel-Buffering": "no",
@@ -62,6 +61,7 @@ function clientIp(req: NextRequest): string {
 }
 
 function makeStream(
+  req: NextRequest,
   handler: (send: (data: object) => void) => Promise<void>
 ): Response {
   const encoder = new TextEncoder();
@@ -80,37 +80,43 @@ function makeStream(
       }
     },
   });
-  return new Response(stream, { headers: sseHeaders() });
+  return new Response(stream, { headers: sseHeaders(req) });
 }
 
-function jsonError(message: string, status: number, details?: string): Response {
+function jsonError(req: NextRequest, message: string, status: number, details?: string): Response {
   return new Response(
     JSON.stringify({ error: message, ...(details ? { details } : {}) }),
-    { status, headers: { "Content-Type": "application/json", ...corsHeaders() } }
+    { status, headers: { "Content-Type": "application/json", ...corsHeadersFor(req, corsOpts) } }
   );
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────────
 
-export async function OPTIONS(): Promise<Response> {
-  return new Response(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(req: NextRequest): Promise<Response> {
+  return corsPreflight(req, corsOpts);
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
   const ip = clientIp(req);
   const started = Date.now();
 
+  // Hard cap incoming body before parsing — prevents OOM on giant payloads.
+  const contentLength = Number(req.headers.get("content-length") ?? "0");
+  if (contentLength > MAX_IMAGE_BYTES + 1024) {
+    return jsonError(req, "Payload too large", 413, `Image must be under 7MB`);
+  }
+
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return jsonError("Invalid JSON body", 400);
+    return jsonError(req, "Invalid JSON body", 400);
   }
 
   const parsed = AnalyzeRequest.safeParse(body);
   if (!parsed.success) {
     const firstIssue = parsed.error.issues[0];
-    return jsonError("Invalid request", 400, firstIssue?.message);
+    return jsonError(req, "Invalid request", 400, firstIssue?.message);
   }
 
   const { barcode, name: productName, brand: productBrand, ingredients, image, category, lang } = parsed.data;
@@ -122,7 +128,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   );
   if (!rl.ok) {
     log.warn("analyze.rate_limited", { ip, isImage, retryAfter: rl.retryAfter });
-    return jsonError(
+    return jsonError(req,
       "Rate limit exceeded",
       429,
       `Too many requests. Retry in ${rl.retryAfter}s.`
@@ -130,10 +136,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   if (!ingredients && !image && !barcode) {
-    return jsonError("Provide at least one of: barcode, ingredients, or image", 400);
+    return jsonError(req, "Provide at least one of: barcode, ingredients, or image", 400);
   }
 
-  return makeStream(async (send) => {
+  return makeStream(req, async (send) => {
     send({ type: "progress", step: "cache", message: "Checking database…" });
 
     // Cache check — master sheet (zero cost, instant)

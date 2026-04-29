@@ -196,7 +196,7 @@ function SearchContent() {
   const showEmpty = !query && category === "All";
 
   return (
-    <div className="px-4 pt-14 pb-24 max-w-lg mx-auto">
+    <div className="px-4 pb-24 max-w-lg mx-auto" style={{ paddingTop: "max(3.5rem, env(safe-area-inset-top))" }}>
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -301,12 +301,12 @@ function SearchContent() {
             ))}
             {dbError && !dbLoading && (
               <p className="text-[11px] text-center py-2" style={{ color: "#FF9F0A" }}>
-                Search timed out — try a shorter or more specific term
+                {t('search_timed_out', language)}
               </p>
             )}
             {offError && !offLoading && (
               <p className="text-[11px] text-center text-oasis-muted py-2">
-                Couldn&apos;t reach OpenFoodFacts — showing local results only
+                {t('search_off_unavailable', language)}
               </p>
             )}
           </motion.div>
