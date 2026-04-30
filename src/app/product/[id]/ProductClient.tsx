@@ -11,7 +11,11 @@ import { SkeletonScoreHero, SkeletonLine } from "@/components/Skeleton";
 import { ScoreRing } from "@/components/ScoreRing";
 import { IngredientList } from "@/components/IngredientList";
 import type { IngredientAnalysis } from "@/lib/mockData";
-import { masterLookup } from "@/lib/master";
+// NOTE: do NOT import masterLookup or anything from "@/lib/master" here.
+// That module statically imports the ~90MB master-products.json, which
+// would balloon the client bundle. The master lookup is performed in the
+// server component at src/app/product/[id]/page.tsx and threaded through
+// `initialProduct`.
 import { getProductByBarcode as getDbProduct, getTopRatedInCategory } from "@/lib/db";
 import { ProductCardHorizontal } from "@/components/ProductCard";
 import type { Product } from "@/lib/mockData";
@@ -409,32 +413,11 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       try { return JSON.parse(raw) as T; } catch { return null; }
     };
 
-    // 0. Try static master sheet first (zero cost, instant)
-    const masterProduct = masterLookup(id);
-    if (masterProduct && masterProduct.safety_score !== null) {
-      const analysis = masterProduct.analysis as unknown as Record<string, unknown> | null;
-      setProduct({
-        id,
-        name: masterProduct.name,
-        brand: masterProduct.brand,
-        category: masterProduct.category,
-        ingredients: masterProduct.ingredients,
-        safety_score: masterProduct.safety_score,
-        grade: masterProduct.score_grade,
-        image_url: masterProduct.image_url || undefined,
-        fssai_license: (masterProduct as unknown as Record<string, unknown>).fssai_license as string | null ?? null,
-        analysis: analysis ? mapAnalysisJson(analysis) : undefined,
-      });
-      recordScan({
-        id,
-        name: masterProduct.name,
-        brand: masterProduct.brand,
-        category: masterProduct.category,
-        safety_score: masterProduct.safety_score,
-        grade: masterProduct.score_grade,
-      });
-      return; // Done — no DB or API calls needed
-    }
+    // 0. Master-sheet lookup happens on the server now (see page.tsx) so
+    //    we don't ship the 90MB JSON to the client. If a match was found
+    //    the server's initialProduct will already be populated and the
+    //    early-return above this effect short-circuits us. No client
+    //    branch needed.
 
     // 1. Try Supabase DB
     getDbProduct(id)

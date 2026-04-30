@@ -100,6 +100,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={inter.variable} data-scroll-behavior="smooth">
       <head>
+        {/* Preconnect to the few origins the app talks to on every meaningful
+            interaction. Saves the TLS+TCP+DNS round-trips the moment a user
+            scans / searches / signs in — typically 200-400ms shaved off the
+            first request to each origin on a cold cell connection. */}
+        <link rel="preconnect" href="https://wcdtiyrdmhsxkxtxlgsr.supabase.co" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://world.openfoodfacts.org" />
+        <link rel="dns-prefetch" href="https://generativelanguage.googleapis.com" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </head>
       <body className="min-h-dvh bg-sift-bg text-sift-label antialiased">

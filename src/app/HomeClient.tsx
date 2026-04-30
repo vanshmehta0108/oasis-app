@@ -6,9 +6,16 @@ import {
   Camera, ChevronRight, TrendingDown, Shield, ShieldAlert, Scale,
   UtensilsCrossed, Coffee, Popcorn, Sparkles, Baby, Home as HomeIcon, Package, UserCircle2
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { ProductCard } from "@/components/ProductCard";
 import { ScoreRing } from "@/components/ScoreRing";
-import { Onboarding } from "@/components/Onboarding";
+// Lazy-load Onboarding — most home loads are returning users who've already
+// finished it, so its bundle (framer-motion stages + i18n + custom-allergy
+// form) doesn't need to ship up-front.
+const Onboarding = dynamic(
+  () => import("@/components/Onboarding").then((m) => m.Onboarding),
+  { ssr: false },
+);
 import { EditorialCard } from "@/components/EditorialCard";
 import { categories } from "@/lib/mockData";
 import type { Product } from "@/lib/mockData";

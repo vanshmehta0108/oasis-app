@@ -3,11 +3,29 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { PackageX, ArrowLeft, Camera, Sparkles } from "lucide-react";
-import { Scanner } from "@/components/Scanner";
+import dynamic from "next/dynamic";
+import { PackageX, ArrowLeft, Camera, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useUserData } from "@/lib/userData";
 import { t } from "@/lib/i18n";
+import { haptic } from "@/lib/haptics";
+
+// Lazy-load the Scanner — it pulls in html5-qrcode (~100 KB minified, plus
+// its own decoder bundle) which is only needed once a user actually opens
+// the scan page. Without dynamic import, that weight is in the shared
+// chunk and slows every other page's first paint too.
+const Scanner = dynamic(
+  () => import("@/components/Scanner").then((m) => m.Scanner),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center h-dvh gap-4 bg-black">
+        <Loader2 size={28} className="text-white/70 animate-spin" />
+        <p className="text-white/60 text-xs">Starting camera…</p>
+      </div>
+    ),
+  },
+);
 
 // Map the app's stored language value to the API's lang param.
 function apiLang(language: "English" | "Hindi"): "en" | "hi" {
@@ -77,8 +95,10 @@ export default function ScanPage() {
   const [loadingNote, setLoadingNote] = useState("");
 
   const handleScan = useCallback(async (barcode: string) => {
-    // Crisp double-tap haptic — feels confident, not buzzy.
-    if (navigator.vibrate) navigator.vibrate([12, 40, 18]);
+    // Cross-platform success haptic — Scanner.tsx already fired one on lock,
+    // this second one tags the "lookup starting" moment so the user gets a
+    // clear two-stage confirmation: "barcode read" → "fetching product".
+    haptic("tap");
     setScannedBarcode(barcode);
     setState("looking-up");
     setLoadingLabel(t('looking_up', lang));
@@ -91,10 +111,10 @@ export default function ScanPage() {
         body: JSON.stringify({ barcode }),
       });
 
-      if (!res.ok) { setState("not-found"); return; }
+      if (!res.ok) { haptic("error"); setState("not-found"); return; }
 
       const data: LookupResult = await res.json();
-      if (!data.found || !data.product) { setState("not-found"); return; }
+      if (!data.found || !data.product) { haptic("error"); setState("not-found"); return; }
 
       let product = data.product;
 
@@ -155,13 +175,19 @@ export default function ScanPage() {
         sessionStorage.setItem(`db-product-${barcode}`, JSON.stringify({ ...product, needs_analysis: false }));
       }
 
+      // Final success — product is enriched and we're navigating. The
+      // ProductClient will render the verdict so we ping a soft success
+      // here to mark "data ready, page is loading".
+      haptic("success");
       router.push(`/product/${product.id}`);
     } catch {
+      haptic("error");
       setState("not-found");
     }
   }, [router, lang]);
 
   const handlePhoto = async (base64: string) => {
+    haptic("tap");
     setState("analyzing-photo");
     setLoadingLabel(t('analysing_label', lang));
     setLoadingNote("Reading the label, scoring ingredients.");
@@ -171,10 +197,10 @@ export default function ScanPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64, lang }),
       });
-      if (!res.ok) { setState("not-found"); return; }
+      if (!res.ok) { haptic("error"); setState("not-found"); return; }
 
       const evt = await readSSEComplete(res);
-      if (!evt || evt.type === "error") { setState("not-found"); return; }
+      if (!evt || evt.type === "error") { haptic("error"); setState("not-found"); return; }
 
       const label = evt.label_extraction as Record<string, unknown> | null;
       const analysis = evt.analysis as Record<string, unknown> | null;
@@ -197,8 +223,10 @@ export default function ScanPage() {
           healthier_alternative: (analysis.healthier_tip as string) || (analysis.healthier_alternative as string) || "",
         } : null,
       }));
+      haptic("success");
       router.push(`/product/${productId}`);
     } catch {
+      haptic("error");
       setState("not-found");
     }
   };

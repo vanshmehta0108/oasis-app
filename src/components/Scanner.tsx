@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, X, ImagePlus, ChevronDown } from "lucide-react";
+import { haptic } from "@/lib/haptics";
 
 interface ScannerProps {
   onScan: (barcode: string) => void;
@@ -10,16 +11,29 @@ interface ScannerProps {
   onClose?: () => void;
 }
 
+// Progressive nudges shown to the user when a scan is taking longer than
+// usual. The bar is set wide enough not to be annoying for fast scans
+// (most are under 2 seconds), but tight enough to reassure / guide when
+// the camera is struggling.
+const NUDGES: { atMs: number; line1: string; line2: string }[] = [
+  { atMs:    0, line1: "Line up the barcode",        line2: "Hold steady — we'll do the rest." },
+  { atMs: 3000, line1: "Hold steady",                line2: "Keep the barcode inside the frame." },
+  { atMs: 6000, line1: "Try moving a bit closer",    line2: "5–10 cm from the pack works best." },
+  { atMs: 9000, line1: "Better light helps a lot",   line2: "Avoid shadows on the barcode." },
+];
+
 export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(true);
   const [manualBarcode, setManualBarcode] = useState("");
   const [showManual, setShowManual] = useState(false);
+  const [nudgeIndex, setNudgeIndex] = useState(0);
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrRef = useRef<unknown>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasScannedRef = useRef(false);
   const autoShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nudgeTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const stopScanner = useCallback(async () => {
     const scanner = html5QrRef.current;
@@ -76,8 +90,13 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
             // Guard against late callbacks after unmount or after a prior scan in this session
             if (!mountedRef.current || hasScannedRef.current) return;
             hasScannedRef.current = true;
-            // Confident double-tap on lock — feels like a confirmation, not noise.
-            if (navigator.vibrate) navigator.vibrate([10, 30, 14]);
+            // Cross-platform success haptic (Android: vibrate, iOS: audio tick,
+            // Capacitor native: real Taptic engine impact). Feels like a
+            // "lock-on" confirmation across all surfaces.
+            haptic("success");
+            // Stop firing nudges as soon as we've locked.
+            for (const t of nudgeTimersRef.current) clearTimeout(t);
+            nudgeTimersRef.current = [];
             onScan(decodedText);
             setScanning(false);
           },
@@ -97,6 +116,17 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
 
     startScanner();
 
+    // Progressive prompts — fire each NUDGES entry on its schedule. A subtle
+    // "ping" haptic accompanies each so the user feels something is happening
+    // even when the visual nudge is easy to miss.
+    nudgeTimersRef.current = NUDGES.slice(1).map((nudge, i) =>
+      setTimeout(() => {
+        if (!mountedRef.current || hasScannedRef.current) return;
+        setNudgeIndex(i + 1);
+        haptic("ping");
+      }, nudge.atMs),
+    );
+
     // After 10 s without a scan, surface the manual entry form automatically
     autoShowTimerRef.current = setTimeout(() => {
       if (mountedRef.current && !hasScannedRef.current) setShowManual(true);
@@ -105,6 +135,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
     return () => {
       mountedRef.current = false;
       if (autoShowTimerRef.current) clearTimeout(autoShowTimerRef.current);
+      for (const t of nudgeTimersRef.current) clearTimeout(t);
+      nudgeTimersRef.current = [];
       stopScanner();
     };
   }, [scanning, onScan, stopScanner]);
@@ -198,17 +230,26 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
         </div>
       </div>
 
-      {/* Instruction text */}
-      <AnimatePresence>
+      {/* Instruction text — swaps to a progressive nudge if the scan is
+          taking longer than usual (3s, 6s, 9s thresholds in NUDGES). */}
+      <AnimatePresence mode="wait">
         {scanning && (
           <motion.div
+            key={nudgeIndex}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="absolute left-0 right-0 text-center pointer-events-none"
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+            className="absolute left-0 right-0 text-center pointer-events-none px-6"
             style={{ top: "calc(50% + 72px)" }}
           >
-            <p className="text-sm text-white/85 font-medium">Line up the barcode</p>
-            <p className="text-xs text-white/55 mt-1">Hold steady — we&apos;ll do the rest.</p>
+            <p className="text-sm text-white/90 font-medium">{NUDGES[nudgeIndex].line1}</p>
+            <p className="text-xs text-white/60 mt-1">{NUDGES[nudgeIndex].line2}</p>
+            {nudgeIndex >= 2 && (
+              <p className="text-[11px] text-white/45 mt-3">
+                Still no luck? Tap <span className="text-white/70 font-medium">Type instead</span> below.
+              </p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
