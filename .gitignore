@@ -63,3 +63,4 @@ src/data/master-products.json
 /test-results
 /playwright-report
 /playwright/.cache
+/.claude/
