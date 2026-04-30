@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import { log } from "@/lib/log";
 import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 import { verifyCaptcha } from "@/lib/captcha";
+import type { CommunitySubmissionInsert } from "@/lib/database.types";
 
 const AddProductRequest = z.object({
   name: z.string().min(1, "Product name is required").max(200),
@@ -68,21 +69,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Admins review via /admin's pending tab and approve into `products`.
     const submissionBarcode = barcode || `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    // The community_submissions table only has the columns listed below in
+    // production (no `brand` / `category`). The user form still collects
+    // those signals — we encode `brand` into product_name so the moderator
+    // sees it on review (e.g. "Maggi Noodles (Maggi)"), and pass `category`
+    // through to the moderation defaults via the override flow on /admin.
+    // A follow-up migration (supabase/migrations/003_*) adds the columns
+    // properly; once it's applied, swap this back to a structured insert.
+    const productNameForReview =
+      brand && brand !== "Unknown" ? `${name} (${brand})` : name;
+
+    const insertRow: CommunitySubmissionInsert = {
+      user_id: user_id || "anonymous",
+      product_name: productNameForReview,
+      barcode: submissionBarcode,
+      // No photo for text-form submissions; empty string is stored.
+      label_image_url: "",
+      extracted_ingredients: ingredients,
+      status: "pending",
+    };
+
     const { data: submission, error } = await supabase
       .from("community_submissions")
-      // @ts-expect-error generated types don't include the extra product fields
-      .insert({
-        user_id: user_id || "anonymous",
-        product_name: name,
-        barcode: submissionBarcode,
-        // No photo for text-form submissions; empty string is stored.
-        label_image_url: "",
-        extracted_ingredients: ingredients,
-        status: "pending" as const,
-        // Extra context the moderator will want on review
-        brand,
-        category,
-      })
+      // @ts-expect-error supabase-js generic inference loses the table row type
+      .insert(insertRow)
       .select()
       .single();
 
