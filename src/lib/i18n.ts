@@ -346,6 +346,31 @@ export const EN = {
   scoring_personalization_desc: "Set your conditions or allergies in Profile and ingredients that affect you are weighted more heavily in your score.",
   scoring_limitations_desc: "The score reflects ingredient safety — not portion size or how much you eat. Always read the label.",
   scoring_disagree_desc: "Tap 'Something wrong?' on any product page. We review every report within 48 hours.",
+
+  // Scanner — progressive prompts (each pair shows when the scan is taking
+  // longer than expected). Keep the second line short so it fits on a
+  // narrow phone screen without wrapping awkwardly.
+  scan_nudge_0_line1: "Line up the barcode",
+  scan_nudge_0_line2: "Hold steady — we'll do the rest.",
+  scan_nudge_3_line1: "Hold the barcode steady",
+  scan_nudge_3_line2: "Keep it inside the frame.",
+  scan_nudge_5_line1: "Stop shaking — stay steady",
+  scan_nudge_5_line2: "Wait 5 seconds. Don't move the phone.",
+  scan_nudge_7_line1: "Try moving a bit closer",
+  scan_nudge_7_line2: "5–10 cm from the pack works best.",
+  scan_nudge_10_line1: "Better light helps a lot",
+  scan_nudge_10_line2: "Avoid shadows on the barcode.",
+  scan_nudge_fallback: "Still no luck? Tap Type instead below.",
+  scan_camera_unavailable: "Camera unavailable",
+  scan_camera_permission: "We need camera access to scan. Allow it in your browser settings, then try again.",
+  scan_camera_busy: "We couldn't start the camera. Close any other apps using it and try again.",
+  scan_type_barcode: "Or type the barcode",
+  scan_barcode_placeholder: "Barcode number…",
+  scan_try_again: "Try again",
+  scan_go: "Go",
+  scan_type_instead: "Type instead",
+  scan_snap_label: "Snap the label",
+  scan_locked_aria: "Barcode locked — looking it up.",
 };
 
 export const HI = {
@@ -684,6 +709,29 @@ export const HI = {
   scoring_personalization_desc: "प्रोफ़ाइल में स्थितियाँ या एलर्जी सेट करें — स्कोर आपके हिसाब से ढलेगा।",
   scoring_limitations_desc: "स्कोर सामग्री सुरक्षा को दर्शाता है — मात्रा को नहीं। हमेशा लेबल पढ़ें।",
   scoring_disagree_desc: "किसी भी उत्पाद पर 'कुछ ग़लत है?' टैप करें। 48 घंटों में जवाब।",
+
+  // Scanner — progressive prompts
+  scan_nudge_0_line1: "बारकोड को फ़्रेम में लाएँ",
+  scan_nudge_0_line2: "स्थिर रखें — बाक़ी हम कर लेंगे।",
+  scan_nudge_3_line1: "बारकोड को स्थिर रखें",
+  scan_nudge_3_line2: "उसे फ़्रेम के अंदर रखें।",
+  scan_nudge_5_line1: "हिलाना बंद करें — स्थिर रहें",
+  scan_nudge_5_line2: "5 सेकंड रुकें। फ़ोन को मत हिलाइए।",
+  scan_nudge_7_line1: "थोड़ा पास लाने की कोशिश करें",
+  scan_nudge_7_line2: "पैक से 5–10 सेमी सबसे अच्छा।",
+  scan_nudge_10_line1: "अच्छी रोशनी से बहुत मदद मिलती है",
+  scan_nudge_10_line2: "बारकोड पर परछाई न आने दें।",
+  scan_nudge_fallback: "अब भी नहीं हुआ? नीचे 'टाइप करें' पर टैप करें।",
+  scan_camera_unavailable: "कैमरा उपलब्ध नहीं",
+  scan_camera_permission: "स्कैन के लिए कैमरा की अनुमति चाहिए। ब्राउज़र सेटिंग में दें और फिर से कोशिश करें।",
+  scan_camera_busy: "कैमरा शुरू नहीं हुआ। कोई दूसरा ऐप उसे इस्तेमाल कर रहा हो तो बंद करें।",
+  scan_type_barcode: "या बारकोड टाइप करें",
+  scan_barcode_placeholder: "बारकोड नंबर…",
+  scan_try_again: "फिर से कोशिश करें",
+  scan_go: "जाएँ",
+  scan_type_instead: "टाइप करें",
+  scan_snap_label: "लेबल की फ़ोटो लें",
+  scan_locked_aria: "बारकोड मिल गया — खोज रहे हैं।",
 };
 
 export const TRANSLATIONS = {

@@ -5,17 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { analyzeIngredients } from "@/lib/scoring";
 import type { Product } from "@/lib/database.types";
-
-function isAuthorized(req: NextRequest): boolean {
-  // Header-only — querystring keys leak via proxy logs, browser history, referrers.
-  const key = req.headers.get("x-admin-key");
-  const secret = process.env.ADMIN_SECRET?.trim();
-  if (!secret) return false;
-  return key?.trim() === secret;
-}
+import { isAdminAuthorized } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -97,7 +90,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 // GET — show analysis stats
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { scrubSentryEvent } from "@/lib/sentryScrub";
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -13,6 +14,10 @@ Sentry.init({
   // Capture 1% of all sessions for session replay
   replaysSessionSampleRate: 0.01,
 
+  // PII off by default; the replay integration also masks all text.
+  sendDefaultPii: false,
+  beforeSend: scrubSentryEvent,
+
   integrations: [
     Sentry.replayIntegration({
       maskAllText: true,
@@ -22,5 +27,4 @@ Sentry.init({
 
   // Don't send events when DSN is not configured
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
-
 });

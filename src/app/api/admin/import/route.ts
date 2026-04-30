@@ -4,18 +4,7 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import type { ProductCategory } from "@/lib/database.types";
-
-// ── Auth ───────────────────────────────────────────────────────────────────────
-
-function isAuthorized(req: NextRequest): boolean {
-  // Header-only — querystring keys leak via proxy logs, browser history, referrers.
-  const key = req.headers.get("x-admin-key");
-  // Trim defensively — Vercel env values pasted via stdin sometimes carry a
-  // trailing newline that silently breaks comparison.
-  const secret = process.env.ADMIN_SECRET?.trim();
-  if (!secret) return false;
-  return key?.trim() === secret;
-}
+import { isAdminAuthorized } from "@/lib/adminAuth";
 
 // ── OFF category → DB category mapping ─────────────────────────────────────────
 
@@ -80,7 +69,7 @@ const INDIAN_QUERIES = [
 // ── Handler ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -105,8 +94,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         url.searchParams.set("page_size", String(pageSize));
         url.searchParams.set("fields", "code,product_name,brands,categories,ingredients_text,image_url,nutriments");
 
+        // Hard 8s ceiling per request so a stalled OFF response can't pin the
+        // serverless function for its full maxDuration.
         const res = await fetch(url.toString(), {
           headers: { "User-Agent": "Oasis-HealthApp/1.0 (admin-import)" },
+          signal: AbortSignal.timeout(8000),
         });
 
         if (!res.ok) {
@@ -195,7 +187,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 // GET — quick status / dry-run showing how many products OFF has for India
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(req)) {
+  if (!isAdminAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -45,22 +45,6 @@
       "purpose": "any"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/screenshots/home.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Home screen showing trending products"
-    },
-    {
-      "src": "/screenshots/product.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Product safety score and ingredient analysis"
-    }
-  ],
   "share_target": {
     "action": "/share",
     "method": "POST",

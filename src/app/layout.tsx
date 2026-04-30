@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { TopNav } from "@/components/TopNav";
 import { ToastProvider } from "@/lib/useToast";
 import { AuthProvider } from "@/lib/useUser";
 import { UserDataProvider } from "@/lib/userData";
@@ -49,14 +50,14 @@ export const metadata: Metadata = {
     "sift app",
   ],
   manifest: "/manifest.json",
-  metadataBase: new URL("https://sift-india.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sift-india.vercel.app"),
   alternates: { canonical: "/" },
   openGraph: {
     title: "Sift — Know What's Really in Your Food",
     description:
       "India's AI-powered product safety scanner. Scan any barcode or ingredient list to get instant safety scores and healthier alternatives.",
     type: "website",
-    url: "https://sift-india.vercel.app",
+    url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://sift-india.vercel.app",
     siteName: "Sift",
     locale: "en_IN",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Sift - India's AI Product Safety App" }],
@@ -84,12 +85,14 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://sift-india.vercel.app").replace(/\/$/, "");
+
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: "Sift",
   description: "India's AI-powered product safety scanner.",
-  url: "https://sift.app",
+  url: SITE_URL,
   applicationCategory: "HealthApplication",
   operatingSystem: "Web",
   offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
@@ -126,7 +129,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <EmailConfirmBanner />
           <OfflineBanner />
           <ToastContainer />
-          <main id="main-content" className="pb-20">{children}</main>
+          <Suspense fallback={null}><TopNav /></Suspense>
+          <main id="main-content" className="pb-20 md:pb-8">{children}</main>
           <Suspense fallback={null}><BottomNav /></Suspense>
           <SpeedInsights />
           <Analytics />

@@ -38,7 +38,16 @@ function isAllowedOrigin(origin: string): boolean {
   // sites.
   try {
     const u = new URL(origin);
-    if (u.protocol === "https:" && u.hostname.endsWith(".vercel.app") && /sift/i.test(u.hostname)) {
+    // Allow only Vercel preview deployments that follow our official subdomain
+    // pattern: `<project>-<hash>-<team>.vercel.app` or `<project>-git-<branch>-<team>.vercel.app`
+    // where <project> begins with one of the known Sift projects. The previous
+    // `/sift/i.test()` check accepted any hostname containing "sift",
+    // including attacker-controlled subdomains like
+    // `attacker-sift-impersonator.vercel.app`.
+    if (
+      u.protocol === "https:" &&
+      /^(sift|trysift|usesift|siftapp)(-in|-india|-app|-health)?(-[a-z0-9]+)*\.vercel\.app$/i.test(u.hostname)
+    ) {
       return true;
     }
   } catch {

@@ -325,7 +325,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
       <motion.div
-        className="px-4 pb-24 max-w-lg mx-auto"
+        className="px-4 pb-24 max-w-lg md:max-w-2xl mx-auto"
         style={{ paddingTop: "max(3rem, env(safe-area-inset-top))" }}
         initial="hidden"
         animate="show"

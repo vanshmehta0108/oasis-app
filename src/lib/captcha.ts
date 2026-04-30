@@ -23,15 +23,22 @@ export type CaptchaResult =
   | { ok: true; mode: "verified" | "skipped" }
   | { ok: false; reason: string };
 
-// Returns ok:true with mode:"skipped" when no secret is configured.
-// This lets the API route call verifyCaptcha() unconditionally and we
-// flip enforcement on by setting an env var.
+// Behavior:
+//  - Dev / preview / non-production: returns ok:true with mode:"skipped" if
+//    no secret is configured, so the closed beta keeps working without keys.
+//  - Production (NODE_ENV === "production"): a missing secret fails CLOSED.
+//    A silently-passing captcha in prod would mean any deploy that forgets
+//    to set HCAPTCHA_SECRET ships an open spam endpoint — caught by Swiggy
+//    in their security review and weaponized by bots before that.
 export async function verifyCaptcha(
   token: string | null | undefined,
   ctx: CaptchaContext = {},
 ): Promise<CaptchaResult> {
   const secret = process.env.HCAPTCHA_SECRET?.trim();
   if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      return { ok: false, reason: "captcha_not_configured" };
+    }
     return { ok: true, mode: "skipped" };
   }
   if (!token || token.length < 10) {

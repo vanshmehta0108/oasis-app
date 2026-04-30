@@ -84,9 +84,12 @@ export default function AdminPage() {
 
   const addLog = (msg: string) => setLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
 
+  // Admin key always travels in the `x-admin-key` header — never in the URL.
+  // Query-string secrets get logged by Vercel/CDN access logs, browser
+  // history, and Referer headers on outbound clicks.
   const fetchStats = useCallback(async (adminKey: string) => {
     try {
-      const res = await fetch(`/api/admin/stats?key=${adminKey}`);
+      const res = await fetch(`/api/admin/stats`, { headers: { "x-admin-key": adminKey } });
       if (!res.ok) throw new Error("Failed");
       setStats(await res.json());
     } catch { addLog("Failed to fetch stats"); }
@@ -95,9 +98,9 @@ export default function AdminPage() {
   const fetchProducts = useCallback(async (page = 1, search = "") => {
     setLoadingProducts(true);
     try {
-      const params = new URLSearchParams({ page: String(page), key });
+      const params = new URLSearchParams({ page: String(page) });
       if (search) params.set("q", search);
-      const res = await fetch(`/api/admin/products?${params}`);
+      const res = await fetch(`/api/admin/products?${params}`, { headers: { "x-admin-key": key } });
       const data = await res.json();
       setProducts(data.products || []);
       setProductTotal(data.total || 0);
@@ -114,7 +117,7 @@ export default function AdminPage() {
   const fetchSubmissions = useCallback(async (status: "pending" | "approved" | "rejected") => {
     setLoadingSubs(true);
     try {
-      const res = await fetch(`/api/admin/moderation?key=${key}&status=${status}`);
+      const res = await fetch(`/api/admin/moderation?status=${status}`, { headers: { "x-admin-key": key } });
       if (!res.ok) throw new Error("failed");
       const data = await res.json();
       setSubmissions(data.submissions || []);
@@ -132,9 +135,9 @@ export default function AdminPage() {
   const moderate = async (id: string, action: "approve" | "reject") => {
     setModeratingId(id);
     try {
-      const res = await fetch(`/api/admin/moderation?key=${key}`, {
+      const res = await fetch(`/api/admin/moderation`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-admin-key": key },
         body: JSON.stringify({ id, action }),
       });
       if (!res.ok) {
@@ -152,7 +155,7 @@ export default function AdminPage() {
   };
 
   const handleAuth = async () => {
-    const res = await fetch(`/api/admin/stats?key=${key}`);
+    const res = await fetch(`/api/admin/stats`, { headers: { "x-admin-key": key } });
     if (res.ok) {
       setAuthenticated(true);
       setStats(await res.json());
@@ -458,7 +461,7 @@ export default function AdminPage() {
           <>
             <div className="rounded-2xl p-4 space-y-3" style={{ background: "#1C1C1E" }}>
               <h2 className="font-semibold">Broad Import</h2>
-              <p className="text-sm" style={{ color: "#8E8E93" }}>Pulls all products tagged "India" from Open Food Facts. No AI cost — just metadata + ingredients.</p>
+              <p className="text-sm" style={{ color: "#8E8E93" }}>Pulls all products tagged &ldquo;India&rdquo; from Open Food Facts. No AI cost — just metadata + ingredients.</p>
               <button
                 onClick={() => runImport()}
                 disabled={!!loading}

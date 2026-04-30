@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { isAdminAuthorized } from "@/lib/adminAuth";
 
-function isAuthorized(req: NextRequest): boolean {
-  // Header-only — querystring keys leak via proxy logs, browser history, referrers.
-  const key = req.headers.get("x-admin-key");
-  // Trim defensively — see admin/import/route.ts for context.
-  const secret = process.env.ADMIN_SECRET?.trim();
-  return !!secret && key?.trim() === secret;
-}
+const DeleteBody = z.object({ id: z.string().uuid() });
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdminAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const page = parseInt(req.nextUrl.searchParams.get("page") || "1");
+  const page = Math.max(1, parseInt(req.nextUrl.searchParams.get("page") || "1", 10) || 1);
   const limit = 20;
   const offset = (page - 1) * limit;
-  const search = req.nextUrl.searchParams.get("q") || "";
+  const rawSearch = req.nextUrl.searchParams.get("q") || "";
+  // Strip PostgREST `or()` operator separators to prevent injection of extra
+  // filter clauses through the search box.
+  const search = rawSearch.slice(0, 100).replace(/[,()*]/g, "");
 
-  let query = supabase.from("products").select("id, barcode, name, brand, category, safety_score, score_grade, source, created_at", { count: "exact" });
+  let query = supabase
+    .from("products")
+    .select("id, barcode, name, brand, category, safety_score, score_grade, source, created_at", { count: "exact" });
 
   if (search) {
     query = query.or(`name.ilike.%${search}%,brand.ilike.%${search}%,barcode.eq.${search}`);
@@ -33,11 +34,20 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdminAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await req.json();
-  const { error } = await supabase.from("products").delete().eq("id", id);
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const parsed = DeleteBody.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid id (UUID required)" }, { status: 400 });
+  }
 
+  const { error } = await supabase.from("products").delete().eq("id", parsed.data.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

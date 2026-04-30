@@ -146,7 +146,7 @@ export default function HomeClient() {
   return (
     <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
       <motion.div
-        className="pb-32 max-w-lg mx-auto"
+        className="pb-32 max-w-lg md:max-w-2xl mx-auto"
         initial="hidden"
         animate="show"
         variants={stagger}

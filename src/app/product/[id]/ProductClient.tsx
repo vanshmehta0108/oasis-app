@@ -754,7 +754,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
   if (!product) {
     return (
       <div className="min-h-dvh" style={{ background: "#F2F2F7" }}>
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-lg md:max-w-2xl mx-auto">
           <SkeletonScoreHero />
           <div className="px-5 space-y-3">
             <SkeletonLine width="100%" height="80px" />
@@ -822,7 +822,7 @@ export default function ProductClient({ id, initialProduct }: { id: string; init
       </div>
 
       <motion.div
-        className="max-w-lg mx-auto pb-8 relative"
+        className="max-w-lg md:max-w-2xl mx-auto pb-8 relative"
         initial="hidden"
         animate="show"
         variants={stagger}

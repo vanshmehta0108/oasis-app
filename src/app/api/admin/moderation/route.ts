@@ -4,18 +4,11 @@ import { supabase } from "@/lib/supabase";
 import { analyzeIngredients } from "@/lib/scoring";
 import { log } from "@/lib/log";
 import type { ProductInsert, ProductCategory, ScoreGrade } from "@/lib/database.types";
-
-function isAuthorized(req: NextRequest): boolean {
-  // Header-only — querystring keys leak via proxy logs, browser history, referrers.
-  const key = req.headers.get("x-admin-key");
-  // Trim defensively — see admin/import/route.ts for context.
-  const secret = process.env.ADMIN_SECRET?.trim();
-  return !!secret && key?.trim() === secret;
-}
+import { isAdminAuthorized } from "@/lib/adminAuth";
 
 // List pending submissions, newest first. Cheap — bounded by default limit.
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdminAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const status = (req.nextUrl.searchParams.get("status") as "pending" | "approved" | "rejected") || "pending";
   const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50"), 100);
@@ -31,18 +24,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ submissions: data ?? [] });
 }
 
+const VALID_CATEGORIES = ["snack", "food", "dairy", "beverage", "water", "skincare"] as const;
+
 const ActionRequest = z.object({
   id: z.string().uuid(),
   action: z.enum(["approve", "reject"]),
   // Optional moderator overrides applied on approval — lets the admin
   // clean up the ingredient list or pick a different category before
-  // the product becomes public.
+  // the product becomes public. Hard length caps prevent malicious moderators
+  // (or compromised admin tokens) from injecting oversized payloads or stored
+  // XSS through the rendered name/brand fields.
   overrides: z
     .object({
-      name: z.string().optional(),
-      brand: z.string().optional(),
-      category: z.string().optional(),
-      ingredients: z.array(z.string()).optional(),
+      name: z.string().trim().min(1).max(200).optional(),
+      brand: z.string().trim().min(1).max(120).optional(),
+      category: z.enum(VALID_CATEGORIES).optional(),
+      ingredients: z.array(z.string().trim().max(200)).max(200).optional(),
     })
     .optional(),
 });
@@ -50,7 +47,7 @@ const ActionRequest = z.object({
 // Approve → create a real products row (AI-scored) + mark submission approved.
 // Reject → mark submission rejected; row stays as an audit trail.
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdminAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
   const parsed = ActionRequest.safeParse(body);
@@ -86,7 +83,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // approve
   const name = overrides?.name || (row.product_name as string);
   const brand = overrides?.brand || ((row as Record<string, unknown>).brand as string) || "Unknown";
-  const category = (overrides?.category || (row as Record<string, unknown>).category || "food") as string;
+  const rawDbCategory = (row as Record<string, unknown>).category;
+  const dbCategory = typeof rawDbCategory === "string" && (VALID_CATEGORIES as readonly string[]).includes(rawDbCategory)
+    ? (rawDbCategory as ProductCategory)
+    : ("food" as ProductCategory);
+  const category: ProductCategory = (overrides?.category as ProductCategory | undefined) || dbCategory;
   const ingredients = overrides?.ingredients || (row.extracted_ingredients as string[]) || [];
   const barcode = (row.barcode as string) || `manual-${Date.now()}`;
 
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     barcode,
     name,
     brand,
-    category: category as ProductCategory,
+    category,
     ingredients,
     ...(analysis
       ? {

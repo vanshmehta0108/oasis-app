@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, X, ImagePlus, ChevronDown } from "lucide-react";
 import { haptic } from "@/lib/haptics";
+import { useLanguage } from "@/components/LanguageProvider";
+import { t } from "@/lib/i18n";
 
 interface ScannerProps {
   onScan: (barcode: string) => void;
@@ -11,23 +13,33 @@ interface ScannerProps {
   onClose?: () => void;
 }
 
-// Progressive nudges shown to the user when a scan is taking longer than
-// usual. The bar is set wide enough not to be annoying for fast scans
-// (most are under 2 seconds), but tight enough to reassure / guide when
-// the camera is struggling.
-const NUDGES: { atMs: number; line1: string; line2: string }[] = [
-  { atMs:    0, line1: "Line up the barcode",        line2: "Hold steady — we'll do the rest." },
-  { atMs: 3000, line1: "Hold steady",                line2: "Keep the barcode inside the frame." },
-  { atMs: 6000, line1: "Try moving a bit closer",    line2: "5–10 cm from the pack works best." },
-  { atMs: 9000, line1: "Better light helps a lot",   line2: "Avoid shadows on the barcode." },
-];
+// Progressive nudges shown when a scan is taking longer than usual. We
+// translate via the i18n table at render time — string keys are stable.
+//
+// Cadence (matches the user-requested rule: at 5s tell them to stop shaking
+// and stay steady for 5 seconds):
+//   0s  — Line up the barcode / Hold steady
+//   3s  — Hold steady (reinforce)
+//   5s  — Stop shaking, stay steady, wait 5 seconds  ← new
+//   7s  — Try moving closer
+//  10s  — Better light helps
+const NUDGE_KEYS = [
+  { atMs: 0,     line1: "scan_nudge_0_line1",  line2: "scan_nudge_0_line2"  },
+  { atMs: 3000,  line1: "scan_nudge_3_line1",  line2: "scan_nudge_3_line2"  },
+  { atMs: 5000,  line1: "scan_nudge_5_line1",  line2: "scan_nudge_5_line2"  },
+  { atMs: 7000,  line1: "scan_nudge_7_line1",  line2: "scan_nudge_7_line2"  },
+  { atMs: 10000, line1: "scan_nudge_10_line1", line2: "scan_nudge_10_line2" },
+] as const;
 
 export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
+  const { language } = useLanguage();
+  const tr = useMemo(() => (k: Parameters<typeof t>[0]) => t(k, language), [language]);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(true);
   const [manualBarcode, setManualBarcode] = useState("");
   const [showManual, setShowManual] = useState(false);
   const [nudgeIndex, setNudgeIndex] = useState(0);
+  const [locked, setLocked] = useState(false);
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrRef = useRef<unknown>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,8 +107,9 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
             // "lock-on" confirmation across all surfaces.
             haptic("success");
             // Stop firing nudges as soon as we've locked.
-            for (const t of nudgeTimersRef.current) clearTimeout(t);
+            for (const tm of nudgeTimersRef.current) clearTimeout(tm);
             nudgeTimersRef.current = [];
+            setLocked(true);
             onScan(decodedText);
             setScanning(false);
           },
@@ -107,19 +120,19 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       } catch (err) {
         if (!mountedRef.current) return;
         if (err instanceof Error && err.message.toLowerCase().includes("permission")) {
-          setError("We need camera access to scan. Allow it in your browser settings, then try again.");
+          setError(tr("scan_camera_permission"));
         } else {
-          setError("We couldn't start the camera. Close any other apps using it and try again.");
+          setError(tr("scan_camera_busy"));
         }
       }
     };
 
     startScanner();
 
-    // Progressive prompts — fire each NUDGES entry on its schedule. A subtle
+    // Progressive prompts — fire each NUDGE_KEYS entry on its schedule. A subtle
     // "ping" haptic accompanies each so the user feels something is happening
     // even when the visual nudge is easy to miss.
-    nudgeTimersRef.current = NUDGES.slice(1).map((nudge, i) =>
+    nudgeTimersRef.current = NUDGE_KEYS.slice(1).map((nudge, i) =>
       setTimeout(() => {
         if (!mountedRef.current || hasScannedRef.current) return;
         setNudgeIndex(i + 1);
@@ -127,19 +140,19 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       }, nudge.atMs),
     );
 
-    // After 10 s without a scan, surface the manual entry form automatically
+    // After 12 s without a scan, surface the manual entry form automatically
     autoShowTimerRef.current = setTimeout(() => {
       if (mountedRef.current && !hasScannedRef.current) setShowManual(true);
-    }, 10000);
+    }, 12000);
 
     return () => {
       mountedRef.current = false;
       if (autoShowTimerRef.current) clearTimeout(autoShowTimerRef.current);
-      for (const t of nudgeTimersRef.current) clearTimeout(t);
+      for (const tm of nudgeTimersRef.current) clearTimeout(tm);
       nudgeTimersRef.current = [];
       stopScanner();
     };
-  }, [scanning, onScan, stopScanner]);
+  }, [scanning, onScan, stopScanner, tr]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -169,20 +182,21 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] px-6 text-center">
+      <div className="flex flex-col items-center justify-center h-[70vh] px-6 text-center" role="alert">
         <div className="w-16 h-16 rounded-full bg-red-400/10 flex items-center justify-center mb-4">
-          <Camera size={28} className="text-red-400" />
+          <Camera size={28} className="text-red-400" aria-hidden="true" />
         </div>
-        <h3 className="text-lg font-semibold text-oasis-text mb-2">Camera unavailable</h3>
+        <h3 className="text-lg font-semibold text-oasis-text mb-2">{tr("scan_camera_unavailable")}</h3>
         <p className="text-sm text-oasis-muted leading-relaxed max-w-xs mb-6">{error}</p>
         <div className="w-full max-w-xs">
-          <p className="text-xs text-oasis-muted mb-2">Or type the barcode</p>
+          <p className="text-xs text-oasis-muted mb-2">{tr("scan_type_barcode")}</p>
           <div className="flex gap-2">
             <input
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              placeholder="Barcode number…"
+              placeholder={tr("scan_barcode_placeholder")}
+              aria-label={tr("scan_type_barcode")}
               value={manualBarcode}
               onChange={(e) => setManualBarcode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && manualBarcode && onScan(manualBarcode)}
@@ -193,7 +207,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
               disabled={!manualBarcode}
               className="px-4 py-2.5 rounded-xl bg-oasis-green text-oasis-black font-semibold text-sm disabled:opacity-50"
             >
-              Go
+              {tr("scan_go")}
             </button>
           </div>
         </div>
@@ -201,7 +215,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
           onClick={() => { setError(null); setScanning(true); }}
           className="mt-4 px-6 py-2.5 rounded-full bg-oasis-green text-oasis-black font-semibold text-sm"
         >
-          Try again
+          {tr("scan_try_again")}
         </button>
       </div>
     );
@@ -231,7 +245,9 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       </div>
 
       {/* Instruction text — swaps to a progressive nudge if the scan is
-          taking longer than usual (3s, 6s, 9s thresholds in NUDGES). */}
+          taking longer than usual. Wrapped in aria-live so screen readers
+          announce the new guidance, and a separate hidden region announces
+          the lock-on event. */}
       <AnimatePresence mode="wait">
         {scanning && (
           <motion.div
@@ -242,17 +258,26 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
             transition={{ duration: 0.3 }}
             className="absolute left-0 right-0 text-center pointer-events-none px-6"
             style={{ top: "calc(50% + 72px)" }}
+            aria-live="polite"
+            aria-atomic="true"
           >
-            <p className="text-sm text-white/90 font-medium">{NUDGES[nudgeIndex].line1}</p>
-            <p className="text-xs text-white/60 mt-1">{NUDGES[nudgeIndex].line2}</p>
-            {nudgeIndex >= 2 && (
-              <p className="text-[11px] text-white/45 mt-3">
-                Still no luck? Tap <span className="text-white/70 font-medium">Type instead</span> below.
-              </p>
+            <p className="text-sm text-white/90 font-medium">
+              {tr(NUDGE_KEYS[nudgeIndex].line1 as Parameters<typeof t>[0])}
+            </p>
+            <p className="text-xs text-white/60 mt-1">
+              {tr(NUDGE_KEYS[nudgeIndex].line2 as Parameters<typeof t>[0])}
+            </p>
+            {nudgeIndex >= 3 && (
+              <p className="text-[11px] text-white/45 mt-3">{tr("scan_nudge_fallback")}</p>
             )}
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Screen-reader-only barcode-locked announcement */}
+      <span className="sr-only" role="status" aria-live="assertive">
+        {locked ? tr("scan_locked_aria") : ""}
+      </span>
 
       {/* Bottom controls */}
       <div
@@ -273,7 +298,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  placeholder="Type the barcode…"
+                  placeholder={tr("scan_barcode_placeholder")}
+                  aria-label={tr("scan_type_barcode")}
                   value={manualBarcode}
                   onChange={(e) => setManualBarcode(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && manualBarcode && onScan(manualBarcode)}
@@ -285,7 +311,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
                   disabled={!manualBarcode}
                   className="px-4 py-2.5 rounded-xl bg-white text-black font-semibold text-sm disabled:opacity-40"
                 >
-                  Go
+                  {tr("scan_go")}
                 </button>
               </div>
             </motion.div>
@@ -306,8 +332,8 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
                 border: "1px solid rgba(255,255,255,0.25)",
               }}
             >
-              <ImagePlus size={16} />
-              Snap the label
+              <ImagePlus size={16} aria-hidden="true" />
+              {tr("scan_snap_label")}
             </motion.button>
           )}
 
@@ -315,13 +341,14 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => setShowManual((v) => !v)}
+            aria-expanded={showManual}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-white/70 text-sm"
             style={{
               background: "rgba(255,255,255,0.10)",
               border: "1px solid rgba(255,255,255,0.15)",
             }}
           >
-            <span>Type instead</span>
+            <span>{tr("scan_type_instead")}</span>
             <ChevronDown
               size={14}
               className={`transition-transform ${showManual ? "rotate-180" : ""}`}
