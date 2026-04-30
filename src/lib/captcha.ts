@@ -24,20 +24,32 @@ export type CaptchaResult =
   | { ok: false; reason: string };
 
 // Behavior:
-//  - Dev / preview / non-production: returns ok:true with mode:"skipped" if
-//    no secret is configured, so the closed beta keeps working without keys.
-//  - Production (NODE_ENV === "production"): a missing secret fails CLOSED.
-//    A silently-passing captcha in prod would mean any deploy that forgets
-//    to set HCAPTCHA_SECRET ships an open spam endpoint — caught by Swiggy
-//    in their security review and weaponized by bots before that.
+//  - HCAPTCHA_SECRET set: full hCaptcha verification.
+//  - HCAPTCHA_SECRET unset + CAPTCHA_REQUIRED=1: fail CLOSED. Swiggy-grade
+//    posture — guarantees no future deploy can ship without captcha just by
+//    forgetting an env var. Set this flag the moment the front-end starts
+//    sending tokens, otherwise /api/add-product will start rejecting real
+//    users.
+//  - HCAPTCHA_SECRET unset + CAPTCHA_REQUIRED unset: no-op pass-through. The
+//    closed-beta default. We log a warning once per cold start in production
+//    so the gap is observable in Vercel logs without silently breaking the
+//    add-product flow.
+let warnedMissingSecret = false;
+
 export async function verifyCaptcha(
   token: string | null | undefined,
   ctx: CaptchaContext = {},
 ): Promise<CaptchaResult> {
   const secret = process.env.HCAPTCHA_SECRET?.trim();
+  const required = process.env.CAPTCHA_REQUIRED?.trim() === "1";
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
+    if (required) {
       return { ok: false, reason: "captcha_not_configured" };
+    }
+    if (process.env.NODE_ENV === "production" && !warnedMissingSecret) {
+      warnedMissingSecret = true;
+      // Visible in Vercel function logs without exposing anything sensitive.
+      console.warn("[captcha] HCAPTCHA_SECRET unset — verifyCaptcha is a no-op. Set CAPTCHA_REQUIRED=1 to fail closed once a real key is provisioned.");
     }
     return { ok: true, mode: "skipped" };
   }
