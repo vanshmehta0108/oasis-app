@@ -7,9 +7,12 @@ import { masterLookup } from "@/lib/master";
 import { supabase } from "@/lib/supabase";
 import { analyzeIngredients, analyzeLabel, translateAnalysis } from "@/lib/scoring";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { checkAiBudget, recordTokenUsage, estimateTokens } from "@/lib/aiBudget";
+import { hashImage, getCachedLabel, setCachedLabel } from "@/lib/imageHash";
 import { log } from "@/lib/log";
 import { corsHeadersFor, corsPreflight } from "@/lib/cors";
 import type { Product, ProductInsert, ProductCategory } from "@/lib/database.types";
+import type { LabelExtraction } from "@/lib/scoring";
 
 // ── Validation ──────────────────────────────────────────────────────────────────
 
@@ -168,20 +171,59 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     // Extract ingredients from image if needed
     let finalIngredients = ingredients ?? [];
-    let labelData = null;
+    let labelData: LabelExtraction | null = null;
 
     if (image) {
       send({ type: "progress", step: "ocr", message: "Reading ingredient label…" });
-      try {
-        labelData = await analyzeLabel(image);
-      } catch (err) {
-        log.error("analyze.label_fail", { ip, err: err instanceof Error ? err.message : String(err) });
-        send({ type: "error", error: "Couldn't read the label — try better lighting or a closer shot." });
-        return;
+
+      // Image-hash dedup: same photo bytes → cached extraction. Avoids
+      // re-paying Gemini for retries / two-tab races / re-uploads of the
+      // same label. Cache hits return instantly with zero AI cost.
+      const imgHash = hashImage(image);
+      const cached = await getCachedLabel(imgHash);
+      if (cached) {
+        try {
+          labelData = JSON.parse(cached) as LabelExtraction;
+          log.info("analyze.cache_hit", { ip, kind: "image_hash" });
+        } catch {
+          labelData = null;
+        }
+      }
+
+      if (!labelData) {
+        // Daily token budget guard — prevents an attacker rotating through
+        // proxies from draining the monthly Gemini cap. Vision calls cost
+        // ~2000 tokens per image; we reserve that minimum before the call.
+        const imageBytes = Math.ceil(image.length * 0.75); // base64 → raw bytes
+        const expected = Math.max(2000, estimateTokens({ imageBytes }));
+        const budget = await checkAiBudget(expected);
+        if (!budget.ok) {
+          log.warn("analyze.budget_blocked", { ip, reason: budget.reason, used: budget.usedToday, cap: budget.cap });
+          send({ type: "error", error: "We're at our daily AI capacity. Try again in a few hours — sorry about that." });
+          return;
+        }
+
+        try {
+          labelData = await analyzeLabel(image);
+        } catch (err) {
+          log.error("analyze.label_fail", { ip, err: err instanceof Error ? err.message : String(err) });
+          send({ type: "error", error: "Couldn't read the label — try better lighting or a closer shot." });
+          return;
+        }
+        // Record actual cost (estimated — Gemini's response usageMetadata
+        // is not surfaced through scoring.ts yet).
+        await recordTokenUsage(expected);
+        // Persist successful extraction for future cache hits. Skip
+        // nutrition-panel mistakes — those are flagged below and we don't
+        // want to lock in the wrong extraction.
       }
       finalIngredients = labelData.ingredients;
 
-      // Detect nutrition facts panel instead of ingredient list
+      // Detect nutrition facts panel instead of ingredient list. If we
+      // arrived here from a fresh OCR call, do NOT cache it — caching the
+      // mistake would mean the same photo keeps returning the same wrong
+      // extraction even after the user takes a better shot of the same
+      // can. We only cache successful, non-nutrition-panel extractions.
       if (looksLikeNutritionPanel(finalIngredients)) {
         send({
           type: "error",
@@ -189,6 +231,11 @@ export async function POST(req: NextRequest): Promise<Response> {
         });
         return;
       }
+
+      // Cache the good extraction for next time. Fire-and-forget so we
+      // don't block the streaming response on Upstash latency.
+      const hashForCache = hashImage(image);
+      void setCachedLabel(hashForCache, JSON.stringify(labelData));
     }
 
     if (finalIngredients.length === 0) {
@@ -201,12 +248,25 @@ export async function POST(req: NextRequest): Promise<Response> {
       return;
     }
 
-    // AI analysis
+    // AI analysis — second budget gate. Text-mode calls are ~10x cheaper
+    // than vision but still count against the daily ceiling. Each
+    // ingredient is ~10 tokens including the model's reply.
+    const expectedTextTokens = Math.max(800, estimateTokens({
+      textLength: finalIngredients.join(" ").length,
+    }) + 400);
+    const textBudget = await checkAiBudget(expectedTextTokens);
+    if (!textBudget.ok) {
+      log.warn("analyze.budget_blocked_text", { ip, reason: textBudget.reason, used: textBudget.usedToday, cap: textBudget.cap });
+      send({ type: "error", error: "We're at our daily AI capacity. Try again in a few hours — sorry about that." });
+      return;
+    }
+
     send({ type: "progress", step: "ai", message: `Analysing ${finalIngredients.length} ingredient${finalIngredients.length === 1 ? "" : "s"}…` });
 
     let analysis;
     try {
       analysis = await analyzeIngredients(finalIngredients, category);
+      await recordTokenUsage(expectedTextTokens);
     } catch (err) {
       log.error("analyze.ingredients_fail", { ip, err: err instanceof Error ? err.message : String(err) });
       const message = err instanceof Error ? err.message : "Analysis failed";

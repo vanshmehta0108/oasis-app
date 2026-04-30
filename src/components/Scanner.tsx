@@ -47,7 +47,25 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
   const autoShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nudgeTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  const nativeListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
+
   const stopScanner = useCallback(async () => {
+    // Stop the native ML Kit scanner if one is running. Wrapped in try/catch
+    // because cleanup happens during unmount when the plugin may already be
+    // gone.
+    const nativeListener = nativeListenerRef.current;
+    nativeListenerRef.current = null;
+    if (nativeListener) {
+      try {
+        await nativeListener.remove();
+        const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+        await BarcodeScanner.stopScan();
+        document.body.classList.remove("sift-native-scanning");
+      } catch {
+        /* ignore */
+      }
+    }
+
     const scanner = html5QrRef.current;
     html5QrRef.current = null;
     if (scanner) {
@@ -62,13 +80,98 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
     }
   }, []);
 
+  // Detect Capacitor native shell at runtime. Safe in SSR — returns false
+  // when window is undefined or Capacitor isn't loaded.
+  const isNativePlatform = useCallback((): boolean => {
+    if (typeof window === "undefined") return false;
+    const w = window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } };
+    return !!w.Capacitor?.isNativePlatform?.();
+  }, []);
+
   useEffect(() => {
     if (!scanning) return;
 
     const mountedRef = { current: true };
     hasScannedRef.current = false;
 
+    // Native ML Kit path — used when running inside the Capacitor Android /
+    // iOS shell. Hardware decoder is faster, more battery-efficient, and
+    // works on devices that block the WebView's getUserMedia (e.g. some
+    // Indian budget Android skins).
+    const startNativeScanner = async (): Promise<boolean> => {
+      try {
+        const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
+        if (!mountedRef.current) return false;
+
+        const supported = await BarcodeScanner.isSupported();
+        if (!supported.supported) return false;
+
+        const moduleAvailable = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
+        if (!moduleAvailable.available) {
+          // First-launch on Android: pull the on-device ML model. Small
+          // (~3MB), one-shot. We continue scanning while it downloads;
+          // ML Kit falls back to the bundled lite scanner.
+          void BarcodeScanner.installGoogleBarcodeScannerModule().catch(() => {});
+        }
+
+        const perm = await BarcodeScanner.requestPermissions();
+        if (perm.camera !== "granted" && perm.camera !== "limited") {
+          setError(tr("scan_camera_permission"));
+          return true; // we tried; don't fall back to web in native shell
+        }
+
+        // ML Kit's startScan renders the camera in the native layer
+        // *behind* the WebView. We hide the WebView's solid background so
+        // it shows through.
+        document.body.classList.add("sift-native-scanning");
+
+        const listener = await BarcodeScanner.addListener("barcodesScanned", (event) => {
+          if (!mountedRef.current || hasScannedRef.current) return;
+          const first = event.barcodes?.[0];
+          const decodedText = first?.rawValue || first?.displayValue;
+          if (!decodedText) return;
+          hasScannedRef.current = true;
+          haptic("success");
+          for (const tm of nudgeTimersRef.current) clearTimeout(tm);
+          nudgeTimersRef.current = [];
+          setLocked(true);
+          onScan(decodedText);
+          setScanning(false);
+        });
+        nativeListenerRef.current = listener;
+
+        await BarcodeScanner.startScan({
+          formats: [
+            BarcodeFormat.Ean13,
+            BarcodeFormat.Ean8,
+            BarcodeFormat.UpcA,
+            BarcodeFormat.UpcE,
+            BarcodeFormat.Code128,
+            BarcodeFormat.Code39,
+            BarcodeFormat.Itf,
+            BarcodeFormat.QrCode,
+          ],
+        });
+        return true;
+      } catch (err) {
+        if (!mountedRef.current) return false;
+        // Fall through to web scanner on any native error — better to scan
+        // via WebView than to fail entirely.
+        if (err instanceof Error && err.message.toLowerCase().includes("permission")) {
+          setError(tr("scan_camera_permission"));
+          return true;
+        }
+        return false;
+      }
+    };
+
     const startScanner = async () => {
+      // Try native first if we're in the Capacitor shell. If it returns
+      // false (unsupported or hard error), fall back to the web scanner.
+      if (isNativePlatform()) {
+        const ok = await startNativeScanner();
+        if (ok) return;
+      }
       try {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (!mountedRef.current || !scannerRef.current) return;
@@ -152,7 +255,7 @@ export function Scanner({ onScan, onPhoto, onClose }: ScannerProps) {
       nudgeTimersRef.current = [];
       stopScanner();
     };
-  }, [scanning, onScan, stopScanner, tr]);
+  }, [scanning, onScan, stopScanner, tr, isNativePlatform]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

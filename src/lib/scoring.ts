@@ -1,5 +1,5 @@
 import { SchemaType, type Schema } from "@google/generative-ai";
-import { getGenAI, MODEL } from "./ai";
+import { getGenAI, MODEL, MODEL_OCR } from "./ai";
 import type { ScoreGrade } from "./database.types";
 import {
   matchUserProfile,
@@ -366,7 +366,9 @@ export async function analyzeLabel(base64Image: string): Promise<LabelExtraction
   }
 
   const model = client.getGenerativeModel({
-    model: MODEL,
+    // OCR-only — use the cheaper flash variant. Reasoning lives in
+    // analyzeIngredients() downstream, so this only needs to read text.
+    model: MODEL_OCR,
     systemInstruction: [
       "You are an expert at reading Indian product labels. Extract all information precisely.",
       "",

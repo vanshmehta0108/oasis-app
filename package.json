@@ -18,7 +18,13 @@
     "e2e:prod": "E2E_BASE_URL=https://sift-india.vercel.app npx -y @playwright/test test",
     "verify": "node scripts/deploy-verify.mjs",
     "setup:rls": "node scripts/setup-rls.mjs",
-    "setup:vendors": "node scripts/configure-vendors.mjs"
+    "setup:vendors": "node scripts/configure-vendors.mjs",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:assets": "npx -y @capacitor/assets generate --android --iconBackgroundColor '#F2F2F7' --splashBackgroundColor '#F2F2F7'",
+    "android:bundle": "bash scripts/build-android-bundle.sh",
+    "android:keystore": "bash scripts/keystore-gen.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

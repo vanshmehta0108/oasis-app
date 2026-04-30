@@ -206,3 +206,18 @@ body {
 .ios-section-row + .ios-section-row {
   border-top: 0.5px solid rgba(60,60,67,0.18);
 }
+
+/* ── Native ML Kit scanner ──
+   The Capacitor barcode plugin renders the camera preview in the native
+   layer *behind* the WebView. To make it visible we need the WebView body
+   transparent for the duration of the scan. Scanner.tsx toggles this
+   class on document.body during native scanning and removes it on
+   cleanup. The web-fallback <div id="oasis-scanner"> is hidden because
+   the native preview replaces it entirely. */
+body.sift-native-scanning,
+body.sift-native-scanning main {
+  background: transparent !important;
+}
+body.sift-native-scanning #oasis-scanner {
+  display: none !important;
+}
