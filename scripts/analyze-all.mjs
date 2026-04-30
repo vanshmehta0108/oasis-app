@@ -142,6 +142,7 @@ async function main() {
             if (updateErr) throw new Error(updateErr.message);
 
             done++;
+            consecutiveFailures = 0; // reset on any success
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
             const rate = (done / (elapsed / 60)).toFixed(1);
             console.log(
@@ -149,16 +150,24 @@ async function main() {
             );
           } catch (err) {
             failed++;
+            consecutiveFailures++;
             console.error(`❌ ${product.name?.slice(0, 40)}: ${err.message?.slice(0, 80)}`);
             if (err.message?.includes("429") || err.message?.includes("quota")) {
               console.log("   ⏳ Rate limited, waiting 15s...");
               await new Promise(r => setTimeout(r, 15_000));
             }
+            // Circuit breaker — abort the pass if too many failures in a row.
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              console.error(`\n💥 ${consecutiveFailures} consecutive failures — circuit breaker tripped. Bailing pass.`);
+              shutdown = true;
+            }
           }
         })
       );
+      if (shutdown) break;
     }
 
+    if (!products.length) break;
     lastId = products[products.length - 1].id;
   }
 
@@ -167,13 +176,55 @@ async function main() {
 }
 
 
-// Run continuously — re-check every 2 min for newly imported products
-async function loop() {
-  while (true) {
-    await main();
-    console.log("⏳ Waiting 2 min before next pass...\n");
-    await new Promise(r => setTimeout(r, 2 * 60_000));
-  }
+// ── Graceful shutdown + circuit breaker ─────────────────────────────────────
+// The script previously looped forever and on persistent Gemini failures
+// would burn API quota and Supabase connections without bound. We now:
+//   1. Reset the consecutive-failure counter on success.
+//   2. Trip a circuit breaker after MAX_CONSECUTIVE_FAILURES in a row and
+//      exit the whole loop (parent process can decide whether to restart).
+//   3. Honour SIGINT/SIGTERM so `Ctrl+C` and `kill` exit cleanly between
+//      products instead of losing the in-flight batch state.
+const MAX_CONSECUTIVE_FAILURES = 8;
+let consecutiveFailures = 0;
+let shutdown = false;
+
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => {
+    if (shutdown) {
+      // Second Ctrl+C → exit hard.
+      console.log(`\n💥 ${sig} again — exiting now.`);
+      process.exit(130);
+    }
+    console.log(`\n⏸  ${sig} received — finishing in-flight items, then exiting.`);
+    shutdown = true;
+  });
 }
 
-loop().catch(console.error);
+// Run continuously — re-check every 2 min for newly imported products
+async function loop() {
+  while (!shutdown) {
+    try {
+      await main();
+    } catch (err) {
+      console.error("Pass crashed:", err?.message || err);
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error(`💥 ${consecutiveFailures} consecutive crashes — exiting.`);
+        process.exit(1);
+      }
+    }
+    if (shutdown) break;
+    console.log("⏳ Waiting 2 min before next pass...\n");
+    // Sleep in small slices so SIGINT isn't blocked for 2 min.
+    for (let i = 0; i < 120 && !shutdown; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  console.log("👋 Exiting analyze-all loop cleanly.");
+  process.exit(0);
+}
+
+loop().catch((err) => {
+  console.error("Fatal:", err);
+  process.exit(1);
+});

@@ -165,7 +165,7 @@ async function main() {
   const startTime = Date.now();
   let lastCheckpoint = Date.now();
 
-  while (true) {
+  while (!shutdown) {
     const { data: rows, error } = await sb
       .from("products")
       .select("id, barcode, name, brand, category")
@@ -265,4 +265,19 @@ async function main() {
   console.log(`${"─".repeat(50)}\n`);
 }
 
-main().catch(err => { console.error("Fatal:", err); process.exit(1); });
+// Graceful shutdown: SIGINT / SIGTERM end the loop after the current batch.
+let shutdown = false;
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => {
+    if (shutdown) {
+      console.log(`\n💥 ${sig} again — exiting now.`);
+      process.exit(130);
+    }
+    console.log(`\n⏸  ${sig} received — finishing in-flight batch, then exiting.`);
+    shutdown = true;
+  });
+}
+
+main()
+  .then(() => process.exit(shutdown ? 130 : 0))
+  .catch((err) => { console.error("Fatal:", err); process.exit(1); });

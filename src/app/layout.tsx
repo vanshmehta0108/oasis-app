@@ -10,6 +10,7 @@ import { LanguageProvider } from "@/components/LanguageProvider";
 import { ToastContainer } from "@/components/Toast";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { SetupBanner } from "@/components/SetupBanner";
+import { EmailConfirmBanner } from "@/components/EmailConfirmBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -115,6 +116,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             Skip to main content
           </a>
           <SetupBanner />
+          <EmailConfirmBanner />
           <OfflineBanner />
           <ToastContainer />
           <main id="main-content" className="pb-20">{children}</main>

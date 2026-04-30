@@ -12,6 +12,10 @@ interface UserContextValue {
   // running in purely-local mode. UIs use this to hide sign-in affordances
   // that would fail.
   authAvailable: boolean;
+  // True when the user has signed up with email but not yet confirmed it.
+  // Drives the "confirm your email" banner. Anonymous users and Google-
+  // signed-in users always have emailConfirmed === true.
+  emailConfirmed: boolean;
 }
 
 const UserContext = createContext<UserContextValue>({
@@ -19,6 +23,7 @@ const UserContext = createContext<UserContextValue>({
   loading: true,
   isAnonymous: true,
   authAvailable: false,
+  emailConfirmed: true,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -52,9 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Supabase exposes confirmation state on the user object. Treat anon users
+  // and providers without emails (e.g. magic-link before confirm) as
+  // "unconfirmed" so the banner can prompt them.
+  const anon = isAnonymous(user);
+  const emailConfirmed = !user || anon
+    ? true
+    : !!(user as User & { email_confirmed_at?: string | null }).email_confirmed_at;
+
   return (
     <UserContext.Provider
-      value={{ user, loading, isAnonymous: isAnonymous(user), authAvailable }}
+      value={{ user, loading, isAnonymous: anon, authAvailable, emailConfirmed }}
     >
       {children}
     </UserContext.Provider>

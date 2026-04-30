@@ -154,6 +154,13 @@ export const EN = {
   error_try_again: "Try again",
   error_generic_body: "We hit an unexpected snag. The Sift team has been notified.",
 
+  // Email confirmation banner
+  email_confirm_banner: "Confirm your email ({email}) to keep your account.",
+  email_confirm_resend: "Resend",
+  email_confirm_sending: "Sending…",
+  email_confirm_resend_sent: "Confirmation email sent — check your inbox.",
+  email_confirm_resend_failed: "Couldn't send the email — please try again later.",
+
   // Privacy + delete data
   privacy_link: "Privacy",
   delete_my_data: "Delete my data",
@@ -485,6 +492,13 @@ export const HI = {
   error_something_wrong: "कुछ गड़बड़ हुई",
   error_try_again: "फिर से कोशिश करें",
   error_generic_body: "अनपेक्षित समस्या हुई। Sift टीम को सूचित कर दिया गया है।",
+
+  // Email confirmation banner
+  email_confirm_banner: "अपनी ईमेल ({email}) कन्फ़र्म करें ताकि अकाउंट बना रहे।",
+  email_confirm_resend: "फिर भेजें",
+  email_confirm_sending: "भेज रहे हैं…",
+  email_confirm_resend_sent: "कन्फ़र्मेशन ईमेल भेजी गई — अपना इनबॉक्स देखें।",
+  email_confirm_resend_failed: "ईमेल नहीं भेज पाए — बाद में फिर कोशिश करें।",
 
   // Privacy + delete data
   privacy_link: "गोपनीयता",

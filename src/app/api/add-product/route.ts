@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { log } from "@/lib/log";
 import { corsHeadersFor, corsPreflight } from "@/lib/cors";
+import { verifyCaptcha } from "@/lib/captcha";
 
 const AddProductRequest = z.object({
   name: z.string().min(1, "Product name is required").max(200),
@@ -12,6 +13,9 @@ const AddProductRequest = z.object({
   ingredients: z.array(z.string().min(1).max(200)).default([]).transform((arr) => arr.slice(0, 100)),
   barcode: z.string().max(64).optional(),
   user_id: z.string().max(100).optional(),
+  // hCaptcha token from the frontend widget. Optional in dev (HCAPTCHA_SECRET
+  // unset) — verifier no-ops in that case.
+  captcha_token: z.string().max(5000).optional(),
 });
 
 const corsOpts = { methods: ["POST", "OPTIONS"] as const };
@@ -47,7 +51,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { name, brand, category, ingredients, barcode, user_id } = parsed.data;
+    const { name, brand, category, ingredients, barcode, user_id, captcha_token } = parsed.data;
+
+    // Captcha gate — no-ops in dev (HCAPTCHA_SECRET unset). Once activated,
+    // bots without a valid token are blocked here.
+    const captcha = await verifyCaptcha(captcha_token, { ip });
+    if (!captcha.ok) {
+      log.warn("add_product.captcha_failed", { ip, reason: captcha.reason });
+      return NextResponse.json(
+        { error: "captcha_failed", details: "Please complete the captcha and try again." },
+        { status: 400, headers: cors },
+      );
+    }
 
     // Community submission → goes to the moderation queue, not live products.
     // Admins review via /admin's pending tab and approve into `products`.
