@@ -10,9 +10,11 @@ import type { ProductCategory } from "@/lib/database.types";
 function isAuthorized(req: NextRequest): boolean {
   // Header-only — querystring keys leak via proxy logs, browser history, referrers.
   const key = req.headers.get("x-admin-key");
-  const secret = process.env.ADMIN_SECRET;
+  // Trim defensively — Vercel env values pasted via stdin sometimes carry a
+  // trailing newline that silently breaks comparison.
+  const secret = process.env.ADMIN_SECRET?.trim();
   if (!secret) return false;
-  return key === secret;
+  return key?.trim() === secret;
 }
 
 // ── OFF category → DB category mapping ─────────────────────────────────────────

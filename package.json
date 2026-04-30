@@ -15,10 +15,19 @@
     "qc": "npx -y tsx scripts/qc-personalization.ts",
     "e2e": "npx -y @playwright/test test",
     "e2e:ui": "npx -y @playwright/test test --ui",
-    "e2e:prod": "E2E_BASE_URL=https://sift-india.vercel.app npx -y @playwright/test test"
+    "e2e:prod": "E2E_BASE_URL=https://sift-india.vercel.app npx -y @playwright/test test",
+    "verify": "node scripts/deploy-verify.mjs",
+    "setup:rls": "node scripts/setup-rls.mjs",
+    "setup:vendors": "node scripts/configure-vendors.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
+    "@capacitor-mlkit/barcode-scanning": "^8.0.1",
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/splash-screen": "^8.0.1",
     "@google/generative-ai": "^0.24.1",
     "@sentry/nextjs": "^10.50.0",
     "@supabase/supabase-js": "^2.101.1",

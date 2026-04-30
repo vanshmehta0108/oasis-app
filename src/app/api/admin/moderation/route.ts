@@ -8,8 +8,9 @@ import type { ProductInsert, ProductCategory, ScoreGrade } from "@/lib/database.
 function isAuthorized(req: NextRequest): boolean {
   // Header-only — querystring keys leak via proxy logs, browser history, referrers.
   const key = req.headers.get("x-admin-key");
-  const secret = process.env.ADMIN_SECRET;
-  return !!secret && key === secret;
+  // Trim defensively — see admin/import/route.ts for context.
+  const secret = process.env.ADMIN_SECRET?.trim();
+  return !!secret && key?.trim() === secret;
 }
 
 // List pending submissions, newest first. Cheap — bounded by default limit.

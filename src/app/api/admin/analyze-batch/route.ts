@@ -9,9 +9,9 @@ import type { Product } from "@/lib/database.types";
 function isAuthorized(req: NextRequest): boolean {
   // Header-only — querystring keys leak via proxy logs, browser history, referrers.
   const key = req.headers.get("x-admin-key");
-  const secret = process.env.ADMIN_SECRET;
+  const secret = process.env.ADMIN_SECRET?.trim();
   if (!secret) return false;
-  return key === secret.trim();
+  return key?.trim() === secret;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {

@@ -4,7 +4,9 @@ import { supabase } from "@/lib/supabase";
 function isAuthorized(req: NextRequest): boolean {
   // Header-only — querystring keys leak via proxy logs, browser history, referrers.
   const key = req.headers.get("x-admin-key");
-  return !!process.env.ADMIN_SECRET && key === process.env.ADMIN_SECRET;
+  // Trim defensively — see admin/import/route.ts for context.
+  const secret = process.env.ADMIN_SECRET?.trim();
+  return !!secret && key?.trim() === secret;
 }
 
 export async function GET(req: NextRequest) {
